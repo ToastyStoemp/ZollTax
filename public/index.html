@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Convention Payment Clusters</title>
+<title>ZollTax</title>
 <style>
 /* Themed to match ZollTool: slate surfaces, emerald accent, system font. */
 :root {
@@ -189,7 +189,7 @@ h1 span{color:var(--accent)}
 .type-pay{background:rgba(78,203,141,.12);color:var(--green)}
 .type-fee{background:rgba(240,96,94,.12);color:var(--red)}
 
-/* ── Accounting bridge controls ── */
+/* ── ZollTax bridge controls ── */
 .bridge-status{display:flex;align-items:center;gap:6px;font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
 .bstat-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:2px}
 .acct-row{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:12px;display:flex;flex-direction:column;gap:9px}
@@ -205,12 +205,22 @@ h1 span{color:var(--accent)}
 .pdf-btn.edt-btn-book{padding:7px 14px}
 .ready-badge{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:var(--green);color:#052e16;font-size:.72rem;font-weight:800;flex-shrink:0}
 .ambig-badge{font-size:.62rem;padding:2px 8px;border-radius:10px;font-weight:600;background:rgba(251,191,36,.12);color:var(--orange);border:1px solid rgba(251,191,36,.4);white-space:nowrap}
+.manual-badge{font-size:.62rem;padding:2px 8px;border-radius:10px;font-weight:600;background:rgba(167,139,250,.14);color:#a78bfa;border:1px solid rgba(167,139,250,.4);white-space:nowrap}
 .auto-btn{border-color:var(--accent2);color:var(--accent2);font-weight:600}
 .auto-btn:hover{background:rgba(56,189,248,.12);border-color:var(--accent2)}
 .book-all-btn{border-color:var(--accent);color:var(--accent);font-weight:600}
 .book-all-btn:hover:not(:disabled){background:rgba(52,211,153,.12);border-color:var(--accent)}
 .book-all-btn:disabled{opacity:.4;cursor:not-allowed}
 .ready-badge.booked{background:var(--accent2);color:#04263a}
+.pull-panel{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:16px}
+.pull-title{font-size:.78rem;font-weight:600;color:var(--text)}
+.pull-presets{display:flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:3px}
+.pull-preset{background:transparent;border:0;border-radius:5px;color:var(--muted);font-family:var(--font);font-size:.7rem;padding:5px 9px;cursor:pointer;white-space:nowrap}
+.pull-preset:hover{color:var(--text);background:rgba(255,255,255,.05)}
+.pull-preset.active{background:rgba(56,189,248,.14);color:var(--accent2)}
+.pull-sep{color:var(--muted)}
+.pull-date{background:var(--surface3);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:var(--font);font-size:.75rem;padding:5px 9px;color-scheme:dark}
+.pull-status{font-size:.72rem;color:var(--muted)}
 
 /* ── No data ── */
 .no-data{text-align:center;padding:70px 24px;color:var(--muted);font-size:.83rem}
@@ -221,8 +231,8 @@ h1 span{color:var(--accent)}
 
 <header>
   <div>
-    <div class="subtitle">myPOS · ZollTool · Lexware</div>
-    <h1>Convention <span>Clusters</span></h1>
+    <div class="subtitle">myPOS · Shopify · ZollTool · Lexware</div>
+    <h1>Zoll<span>Tax</span></h1>
   </div>
   <div id="bridgeStatus" class="bridge-status"></div>
 </header>
@@ -232,6 +242,20 @@ h1 span{color:var(--accent)}
   <h3>Drop your XLS / XLSX / CSV file here</h3>
   <p>Accepts <strong>myPOS Transaction History</strong>, <strong>myPOS Monthly Statement</strong>, <strong>Shopify Orders CSV</strong>, and <strong>Wise Transaction History</strong> — load multiple files, they are merged automatically</p>
   <input type="file" id="fileInput" accept=".xls,.xlsx,.csv">
+</div>
+
+<div id="shopifyPull" class="pull-panel" style="display:none">
+  <span class="pull-title">🛍 Pull Shopify orders</span>
+  <div class="pull-presets" aria-label="Shopify date range">
+    <button type="button" class="pull-preset active" data-range="last-month" onclick="setShopifyRange('last-month')">Last month</button>
+    <button type="button" class="pull-preset" data-range="last-3-months" onclick="setShopifyRange('last-3-months')">Last 3 months</button>
+    <button type="button" class="pull-preset" data-range="custom" onclick="setShopifyRange('custom')">Custom</button>
+  </div>
+  <input type="date" id="shopFrom" class="pull-date" title="From (paid date)" onchange="setShopifyRange('custom', { keepDates: true })">
+  <span class="pull-sep">→</span>
+  <input type="date" id="shopTo" class="pull-date" title="To (paid date)" onchange="setShopifyRange('custom', { keepDates: true })">
+  <button class="pill auto-btn" onclick="pullShopify()">⬇ Pull</button>
+  <span id="shopPullStatus" class="pull-status"></span>
 </div>
 <div id="resetBar" style="display:none;text-align:right;margin-bottom:8px">
   <button onclick="resetAll()" style="background:none;border:1px solid var(--border2);border-radius:6px;color:var(--muted);font-family:var(--font);font-size:.7rem;padding:4px 12px;cursor:pointer" onmouseover="this.style.color='var(--red)';this.style.borderColor='var(--red)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border2)'">✕ Clear all data</button>
@@ -418,10 +442,20 @@ function parseShopify(rows) {
     const refunded = parseFloat(String(col(r,'refunded_amount')).replace(',','.')) || 0;
     const amount   = total - refunded; // net of any refunds
 
-    // Terminal = Location name; no location = online order
+    // Classify by the order Source: web → online (one monthly online cluster);
+    // pos / shopify_draft_order → a normal device cluster. Fall back to Location
+    // only when Source is absent. (Web orders can carry a Location like
+    // "Online Store", so Location alone must not decide online vs POS.)
+    const source = String(col(r,'source')).trim().toLowerCase();
     const location = String(col(r,'location')).trim();
-    const isOnline = !location;
-    const terminal = location || 'Shopify Online';
+    // web → online; draft orders are online too when their location is the
+    // Online Store (they can also be a real POS/draft at a venue); pos → cluster.
+    const isOnline = source
+      ? (source === 'web' || (source === 'shopify_draft_order' && /online store/i.test(location)))
+      : !location;
+    const terminal = isOnline
+      ? 'Shopify Online'
+      : (location || (source === 'shopify_draft_order' ? 'Shopify Draft' : 'Shopify POS'));
 
     const paymentMethod = String(col(r,'payment_method')).trim();
     const isManual = ['manual','custom (pos)'].includes(paymentMethod.toLowerCase());
@@ -1491,6 +1525,7 @@ function renderCluster(c) {
         ${c.customName?`<span class="cluster-customname" title="${c.customName}">${c.customName}</span>`:''}
         <div class="device-badges">${deviceBadges}</div>
         ${typeof ambiguityBadge === 'function' ? ambiguityBadge(c) : ''}
+        ${typeof manualBadge === 'function' ? manualBadge(c) : ''}
       </div>
       <div class="cluster-meta">
         <div class="cluster-stat"><div class="cs-label">Revenue${c.cashAmount?' +cash':''}</div><div class="cs-value" style="color:var(--green)">${fmtAmt(c.totalPay+(c.cashAmount||0))}</div></div>
@@ -1557,7 +1592,7 @@ function renderCluster(c) {
 </script>
 <script>
 // ══════════════════════════════════════════════════════════════════
-// ACCOUNTING BRIDGE — ZollTool matching · myPOS verify · Lexware booking
+// ZOLLTAX — ZollTool matching · myPOS verify · Lexware booking
 // Talks to the local Node backend (src/server.js); the browser never sees
 // any secret. Degrades gracefully to the offline PDF tool if unreachable.
 // ══════════════════════════════════════════════════════════════════
@@ -1566,6 +1601,10 @@ async function loadBridge() {
     const st = await fetch('/api/status').then(r => r.json());
     window.bridge = st;
     renderBridgeStatus(st);
+    if (st.shopify) {
+      document.getElementById('shopifyPull').style.display = 'flex';
+      setShopifyRange(window.shopifyRangeMode || 'last-month');
+    }
     if (st.zolltool && st.zolltool.configured) {
       const d = await fetch('/api/zolltool/events').then(r => r.json());
       window.zollEvents = (d.events || []).filter(e => e.dateStart && e.dateEnd);
@@ -1582,7 +1621,61 @@ function renderBridgeStatus(st) {
   el.innerHTML =
     `${dot(st.zolltool.configured)}ZollTool` +
     `&nbsp;&nbsp;${dot(st.mypos.mode === 'live')}myPOS ${st.mypos.mode}` +
+    `&nbsp;&nbsp;${dot(st.shopify && st.shopify.mode === 'live' && st.shopify.ready !== false)}Shopify ${st.shopify ? st.shopify.mode : '—'}` +
     `&nbsp;&nbsp;${dot(st.lexware.configured)}Lexware`;
+}
+
+function dateInputValue(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+function shopifyRangeDates(mode) {
+  const now = new Date();
+  if (mode === 'last-3-months') {
+    return {
+      from: dateInputValue(new Date(now.getFullYear(), now.getMonth() - 3, 1)),
+      to: dateInputValue(new Date(now.getFullYear(), now.getMonth(), 0)),
+    };
+  }
+  return {
+    from: dateInputValue(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
+    to: dateInputValue(new Date(now.getFullYear(), now.getMonth(), 0)),
+  };
+}
+function setShopifyRange(mode, opts = {}) {
+  window.shopifyRangeMode = mode;
+  document.querySelectorAll('.pull-preset').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.range === mode);
+  });
+  if (!opts.keepDates && mode !== 'custom') {
+    const range = shopifyRangeDates(mode);
+    document.getElementById('shopFrom').value = range.from;
+    document.getElementById('shopTo').value = range.to;
+  }
+  const isCustom = mode === 'custom';
+  document.getElementById('shopFrom').readOnly = !isCustom;
+  document.getElementById('shopTo').readOnly = !isCustom;
+}
+
+// Pull Shopify orders for a date range and feed them through the clustering
+// engine (online → monthly online cluster; POS locations → device clusters).
+async function pullShopify() {
+  const from = document.getElementById('shopFrom').value;
+  const to = document.getElementById('shopTo').value;
+  const st = document.getElementById('shopPullStatus');
+  if (!from || !to) { st.textContent = 'Pick a from and to date.'; return; }
+  if (from > to) { st.textContent = 'From date must be before the to date.'; return; }
+  st.textContent = 'Pulling…';
+  try {
+    const d = await fetch(`/api/shopify/orders?from=${from}&to=${to}`).then(r => r.json());
+    if (d.error) throw new Error(d.error);
+    const txns = (d.orders || []).map(o => ({ ...o, id: Math.random().toString(36).slice(2), date: new Date(o.date) }));
+    if (!txns.length) { st.textContent = 'No paid orders in that period.'; return; }
+    mergeClusters(txns);
+    st.textContent = `Imported ${txns.length} order(s)${d.mode === 'mock' ? ' — mock data' : ''}.`;
+  } catch (e) { st.textContent = 'Failed: ' + e.message; }
 }
 function isoDay(d) { return new Date(d).toISOString().slice(0, 10); }
 
@@ -1836,6 +1929,13 @@ function overlappingEvents(c) {
   if (c.isOnlineCluster || !window.zollEvents) return [];
   const s = isoDay(c.startDate), e = isoDay(c.endDate);
   return window.zollEvents.filter(ev => ev.dateStart <= e && ev.dateEnd >= s);
+}
+// Flag a cluster that contains manual / custom (POS) payment orders — these were
+// likely taken on a card terminal (myPOS) and may double-count with its data.
+function manualBadge(c) {
+  const n = (c.txns || []).filter(t => t.isManual).length;
+  if (!n) return '';
+  return `<span class="manual-badge" title="${n} manual / custom-payment order(s) — may already be in your card (myPOS) totals">✋ ${n} manual</span>`;
 }
 // Flag an unmatched cluster that overlaps 2+ events (auto-match can't decide).
 function ambiguityBadge(c) {

@@ -1,10 +1,10 @@
 {
-  "name": "lexware-revenue-upload",
+  "name": "zolltax",
   "version": "1.0.0",
-  "description": "Upload a revenue PDF to Lexware Office (lexoffice) and book it as an income voucher via the public API.",
+  "description": "ZollTax books convention revenue from myPOS, Shopify, Wise, ZollTool, and Lexware workflows.",
   "type": "module",
   "bin": {
-    "lexware-revenue": "src/index.js"
+    "zolltax": "src/index.js"
   },
   "scripts": {
     "web": "node src/server.js",

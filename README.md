@@ -1,8 +1,8 @@
-# Accounting bridge (myPOS · ZollTool · Lexware)
+# ZollTax
 
 Two things live here:
 
-1. **Web app** (`npm run web`) — the convention **payment-cluster** tool: upload
+1. **Web app** (`npm run web`) — ZollTax, the convention **payment-cluster** tool: upload
    myPOS transaction exports / statements, Shopify, and Wise files; it clusters
    transactions into conventions, matches each cluster to a **ZollTool event**,
    **verifies** the totals against the live **myPOS Banking API**, and books the
@@ -28,11 +28,19 @@ npm run web               # → http://localhost:4000
 | `LEXWARE_FEE_CATEGORY` | Expense account UUID for the monthly fees voucher. |
 | `ZOLLTOOL_URL` / `ZOLLTOOL_EMAIL` / `ZOLLTOOL_PASSWORD` | ZollTool read-API login (a dedicated account). |
 | `MYPOS_*` | myPOS Banking API gateway creds (Partner Portal). Unset → mock verify data. |
+| `SHOPIFY_SHOP` / `SHOPIFY_CLIENT_ID` / `SHOPIFY_CLIENT_SECRET` | Shopify Dev Dashboard app credentials. The backend exchanges these for an Admin API token automatically (read_orders, read_locations). Unset → mock pull data. |
+| `SHOPIFY_ACCESS_TOKEN` | Optional legacy/static Admin API token fallback if you already have one. |
 
-Flow: **upload** payment files → clusters render → **match** each to a ZollTool
-event (auto-suggested by overlapping dates) → **Verify vs myPOS** (badge) → **Book
-revenue to Lexware** per cluster / **Book fees** per month. Booking previews a
-dry-run and asks before it writes.
+Flow: **upload** payment files (or **Pull Shopify** orders for a date range) →
+clusters render → **match** each to a ZollTool event (auto-suggested by overlapping
+dates, or **✨ Auto merge & match** all at once) → **Verify vs myPOS** (badge) →
+**Book revenue to Lexware** per cluster (or **⇪ Book all ready**) / **Book fees**
+per month. Booking previews a dry-run and asks before it writes.
+
+Shopify **online** orders (no location) are grouped into one **monthly online
+report** (`PN_YYYY_MM_ONL`) and booked as monthly online revenue; Shopify **POS**
+orders (a store location) become device clusters that match to events like a
+myPOS terminal. The same data can also come from an uploaded Shopify Orders CSV.
 
 ## CLI (`payload.json` → Lexware)
 

@@ -8,9 +8,10 @@ import { buildRevenueVoucher } from './voucher.js';
 import { buildFeeVoucher } from './expense.js';
 import { MyposClient, summarize } from './mypos.js';
 import { ZolltoolClient } from './zolltool.js';
+import { ShopifyClient } from './shopify.js';
 
 /**
- * Accounting bridge backend: serves the cluster UI (public/) and a small JSON
+ * ZollTax backend: serves the cluster UI (public/) and a small JSON
  * API that the page cannot do itself because it needs secrets / cross-origin
  * access — reading ZollTool events, verifying against live myPOS, and booking
  * Lexware vouchers. All credentials stay here (env), never in the browser.
@@ -59,11 +60,13 @@ async function serveStatic(req, res) {
 // Reused across requests so the ZollTool session / myPOS token can be cached.
 const zoll = new ZolltoolClient();
 const mypos = new MyposClient();
+const shopify = new ShopifyClient();
 
 const routes = {
   'GET /api/status': async () => ({
     zolltool: { configured: zoll.configured, url: zoll.config.url || null },
     mypos: { mode: mypos.mode },
+    shopify: await shopify.status({ warmToken: true }),
     lexware: { configured: !!config.apiKey, feeCategory: !!process.env.LEXWARE_FEE_CATEGORY },
   }),
 
@@ -87,6 +90,14 @@ const routes = {
     if (!from || !to) throw new HttpError(400, 'from and to are required (YYYY-MM-DD).');
     const txns = await mypos.listTransactions({ from, to, account });
     return { mode: mypos.mode, summary: summarize(txns), from, to };
+  },
+
+  'GET /api/shopify/orders': async (url) => {
+    const from = url.searchParams.get('from');
+    const to = url.searchParams.get('to');
+    if (!from || !to) throw new HttpError(400, 'from and to are required (YYYY-MM-DD).');
+    const orders = await shopify.listOrders({ from, to });
+    return { mode: shopify.mode, count: orders.length, from, to, orders };
   },
 
   'POST /api/lexware/book': async (_url, body) => bookVoucher(body),
@@ -174,8 +185,9 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`\nAccounting bridge → http://localhost:${PORT}`);
+  console.log(`\nZollTax → http://localhost:${PORT}`);
   console.log(`  ZollTool: ${zoll.configured ? zoll.config.url : 'not configured'}`);
   console.log(`  myPOS:    ${mypos.mode} mode`);
+  console.log(`  Shopify: ${shopify.mode} mode (${shopify.authMode})`);
   console.log(`  Lexware:  ${config.apiKey ? 'configured' : 'not configured'}\n`);
 });

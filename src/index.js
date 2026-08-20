@@ -7,7 +7,7 @@ import { buildRevenueVoucher } from './voucher.js';
 import { loadEventCatalog, resolveEvent, deriveVoucherInput } from './events.js';
 
 const HELP = `
-lexware-revenue — book a revenue PDF into Lexware Office (lexoffice)
+ZollTax CLI — book a revenue PDF into Lexware Office (lexoffice)
 
 Usage:
   node src/index.js [payload.json] [--dry-run]
