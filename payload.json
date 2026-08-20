@@ -1,0 +1,18 @@
+{
+  "pdf": "./data/example.pdf",
+  "voucherNumber": "PN_2026_08_001_P",
+  "totalGrossAmount": 2700.0,
+  "taxType": "gross",
+  "category": "einnahmen",
+  "customer": "contact",
+  "voucherStatus": "open",
+  "paidPrivately": true,
+
+  "event": {
+    "name": "Aninite",
+    "country": "Austria",
+    "startDate": "2026-08-07",
+    "endDate": "2026-08-09",
+    "vatRate": 0
+  }
+}

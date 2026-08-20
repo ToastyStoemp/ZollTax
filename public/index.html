@@ -1,0 +1,1928 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Convention Payment Clusters</title>
+<style>
+/* Themed to match ZollTool: slate surfaces, emerald accent, system font. */
+:root {
+  --bg:#020617; --surface:#0f172a; --surface2:#1e293b; --surface3:#334155;
+  --border:#1e293b; --border2:#334155;
+  --accent:#34d399; --accent2:#38bdf8;
+  --green:#34d399; --red:#f87171; --orange:#fbbf24;
+  --text:#f1f5f9; --muted:#94a3b8; --muted2:#64748b;
+  --font:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;padding:28px 22px}
+
+/* ── Header ── */
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:32px;padding-bottom:20px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+h1{font-family:var(--font);font-size:1.9rem;font-weight:800;letter-spacing:-0.03em;line-height:1}
+h1 span{color:var(--accent)}
+.subtitle{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin-bottom:4px}
+
+/* ── Upload ── */
+.upload-zone{border:2px dashed var(--border);border-radius:12px;padding:44px 32px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:28px}
+.upload-zone:hover,.upload-zone.dragover{border-color:var(--accent);background:rgba(240,192,64,.04)}
+.upload-zone .icon{font-size:2.2rem;margin-bottom:10px}
+.upload-zone h3{font-family:var(--font);font-size:1rem;margin-bottom:5px}
+.upload-zone p{color:var(--muted);font-size:.78rem}
+.upload-zone input{display:none}
+.upload-zone.compact{padding:12px 20px;display:flex;align-items:center;gap:14px;text-align:left;margin-bottom:16px}
+.upload-zone.compact .icon{font-size:1.3rem;margin-bottom:0;flex-shrink:0}
+.upload-zone.compact h3{font-size:.8rem;margin-bottom:2px}
+.upload-zone.compact p{font-size:.68rem}
+
+/* ── Summary bar ── */
+#output{display:none}
+.summary-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:26px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.stat-card .label{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px}
+.stat-card .value{font-family:var(--font);font-size:1.4rem;font-weight:700}
+.value.green{color:var(--green)}.value.red{color:var(--red)}.value.yellow{color:var(--accent)}.value.blue{color:var(--accent2)}
+
+/* ── Filters ── */
+.toolbar{display:flex;gap:10px;margin-bottom:22px;flex-wrap:wrap;align-items:center}
+.filter-label{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
+.pill{padding:5px 13px;border-radius:20px;font-size:.72rem;cursor:pointer;border:1px solid var(--border);background:var(--surface);transition:all .15s;font-family:var(--font)}
+.pill:hover{border-color:var(--muted)}
+.pill.active{background:var(--accent);color:#111;border-color:var(--accent);font-weight:500}
+.pill.device-go2.active{background:var(--accent2);color:#fff;border-color:var(--accent2)}
+
+/* ── Cluster card ── */
+.clusters-grid{display:flex;flex-direction:column;gap:20px}
+.cluster-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.cluster-card.editing{border-color:var(--orange)}
+
+.cluster-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;cursor:pointer;user-select:none;gap:14px;flex-wrap:wrap}
+.cluster-header:hover{background:rgba(255,255,255,.02)}
+.cluster-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
+
+.cluster-id{font-family:var(--font);font-size:.75rem;font-weight:500;padding:3px 9px;border-radius:6px;background:rgba(255,255,255,.07);border:1px solid var(--border2);color:var(--text);letter-spacing:.04em;white-space:nowrap}
+.cluster-label{font-family:var(--font);font-size:.95rem;font-weight:700}
+.cluster-customname{font-size:.78rem;color:var(--accent);font-style:italic;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.device-badge{font-size:.65rem;padding:3px 9px;border-radius:10px;font-weight:500;text-transform:uppercase;letter-spacing:.07em;white-space:nowrap}
+.badge-carbon{background:rgba(240,192,64,.14);color:var(--accent);border:1px solid rgba(240,192,64,.28)}
+.badge-go2{background:rgba(91,142,240,.14);color:var(--accent2);border:1px solid rgba(91,142,240,.28)}
+.badge-carbon-old{background:rgba(240,192,64,.08);color:#c0982a;border:1px solid rgba(240,192,64,.18)}
+.badge-shopify{background:rgba(100,210,120,.14);color:#5db87a;border:1px solid rgba(100,210,120,.3)}
+.badge-online{background:rgba(100,160,240,.14);color:#60a0f0;border:1px solid rgba(100,160,240,.3)}
+.badge-wise{background:rgba(0,180,120,.14);color:#00b478;border:1px solid rgba(0,180,120,.3)}
+.badge-multi{background:rgba(160,100,240,.14);color:#c078f0;border:1px solid rgba(160,100,240,.28)}
+.device-badges{display:flex;gap:4px;flex-wrap:wrap}
+
+/* ── Monthly export bar ── */
+.month-group{margin-bottom:28px}
+.month-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:12px;flex-wrap:wrap}
+.month-title{font-family:var(--font);font-size:1rem;font-weight:700;display:flex;align-items:center;gap:10px}
+.month-id{font-size:.7rem;padding:2px 8px;border-radius:5px;background:rgba(255,255,255,.07);border:1px solid var(--border2);letter-spacing:.04em}
+.month-stats{display:flex;gap:16px;font-size:.72rem;flex-wrap:wrap;align-items:center}
+.month-stats span{color:var(--muted)}
+.month-stats strong{color:var(--text)}
+.pdf-btn-month-p{color:var(--green);border-color:rgba(78,203,141,.38);background:rgba(78,203,141,.07)}
+.pdf-btn-month-p:hover{background:rgba(78,203,141,.15);border-color:var(--green)}
+.pdf-btn-month-f{color:var(--red);border-color:rgba(240,96,94,.38);background:rgba(240,96,94,.07)}
+.pdf-btn-month-f:hover{background:rgba(240,96,94,.15);border-color:var(--red)}
+.month-export-row{display:flex;gap:8px;flex-wrap:wrap}
+.month-divider{height:1px;background:var(--border);margin-bottom:14px}
+
+/* ── Merge suggestion banner ── */
+.merge-banner{background:rgba(160,100,240,.08);border:1px solid rgba(160,100,240,.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.merge-banner-text{font-size:.72rem;color:#c078f0}
+.merge-banner-text strong{color:#d090ff}
+.manual-warning{background:rgba(240,160,64,.08);border:1px solid rgba(240,160,64,.35);border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.manual-warning-text{font-size:.72rem;color:#f0a040;line-height:1.5}
+.manual-warning-text strong{color:#ffc060}
+.manual-warning-orders{font-size:.68rem;color:var(--muted);margin-top:4px}
+.edt-btn-warn{color:#f0a040;border-color:rgba(240,160,64,.4);background:rgba(240,160,64,.08);white-space:nowrap}
+.edt-btn-warn:hover{background:rgba(240,160,64,.18);border-color:#f0a040}
+.edt-btn-merge{color:#c078f0;border-color:rgba(160,100,240,.4);background:rgba(160,100,240,.08)}
+.edt-btn-merge:hover{background:rgba(160,100,240,.18)}
+.merge-select{background:var(--surface3);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:var(--font);font-size:.75rem;padding:6px 10px;flex:1;min-width:160px;cursor:pointer;transition:border-color .15s}
+.merge-select:focus{outline:none;border-color:#c078f0}
+.merge-select option{background:var(--surface3)}
+
+.cluster-meta{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+.cluster-stat{text-align:right}
+.cs-label{font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.cs-value{font-family:var(--font);font-size:1rem;font-weight:700}
+.chevron{color:var(--muted);transition:transform .2s;font-size:.9rem;flex-shrink:0}
+.cluster-card.open .chevron{transform:rotate(180deg)}
+
+.cluster-body{display:none;padding:0 20px 18px}
+.cluster-card.open .cluster-body{display:block}
+
+/* ── Edit panel ── */
+.edit-panel{background:var(--surface2);border:1px solid var(--orange);border-radius:10px;padding:16px;margin-bottom:14px}
+.edit-panel-title{font-size:.68rem;text-transform:uppercase;letter-spacing:.12em;color:var(--orange);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.edit-panel-title svg{width:13px;height:13px;flex-shrink:0}
+.edit-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.edit-label{font-size:.7rem;color:var(--muted);min-width:80px}
+.edit-input{background:var(--surface3);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:var(--font);font-size:.78rem;padding:6px 10px;flex:1;min-width:160px;transition:border-color .15s}
+.edit-input:focus{outline:none;border-color:var(--accent)}
+.edit-input[type=date]{color-scheme:dark;cursor:pointer}
+.edit-input.gap-input{width:80px;flex:none}
+
+.edit-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.edt-btn{padding:6px 14px;border-radius:6px;font-family:var(--font);font-size:.72rem;cursor:pointer;border:1px solid;transition:all .15s;background:transparent}
+.edt-btn-apply{color:var(--green);border-color:rgba(78,203,141,.4);background:rgba(78,203,141,.08)}
+.edt-btn-apply:hover{background:rgba(78,203,141,.18)}
+.edt-btn-split{color:var(--orange);border-color:rgba(240,144,64,.4);background:rgba(240,144,64,.08)}
+.edt-btn-split:hover{background:rgba(240,144,64,.18)}
+.edt-btn-cancel{color:var(--muted);border-color:var(--border2)}
+.edt-btn-cancel:hover{color:var(--text);border-color:var(--muted)}
+.edt-btn-danger{color:var(--red);border-color:rgba(240,96,94,.4);background:rgba(240,96,94,.08)}
+.edt-btn-danger:hover{background:rgba(240,96,94,.18)}
+
+/* txn selector for split */
+.txn-selector{max-height:200px;overflow-y:auto;border:1px solid var(--border2);border-radius:6px;margin-top:8px}
+.txn-sel-row{display:flex;align-items:center;gap:10px;padding:5px 10px;font-size:.72rem;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition:background .1s}
+.txn-sel-row:hover{background:rgba(255,255,255,.04)}
+.txn-sel-row:last-child{border-bottom:none}
+.txn-sel-row input[type=checkbox]{accent-color:var(--orange);width:13px;height:13px}
+.txn-sel-date{color:var(--muted);min-width:110px}
+.txn-sel-amt{margin-left:auto;font-weight:500}
+.txn-sel-amt.pay{color:var(--green)}.txn-sel-amt.fee{color:var(--red)}
+
+/* ── Info rows ── */
+.cluster-sections{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+@media(max-width:640px){.cluster-sections{grid-template-columns:1fr}}
+.section-box{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:13px 15px}
+.section-box h4{font-size:.67rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin-bottom:9px;display:flex;align-items:center;gap:7px}
+.dot{width:6px;height:6px;border-radius:50%;display:inline-block}
+.dot-pay{background:var(--green)}.dot-fee{background:var(--red)}.dot-cash{background:#a78bfa}
+.big-num{font-family:var(--font);font-size:1.7rem;font-weight:800;line-height:1;margin-bottom:3px}
+.big-num.green{color:var(--green)}.big-num.red{color:var(--red)}.big-num.purple{color:#a78bfa}
+.section-sub{font-size:.72rem;color:var(--muted)}
+.divider{height:1px;background:var(--border);margin:11px 0}
+
+.net-row{display:flex;justify-content:space-between;align-items:center;padding:9px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:12px}
+.net-label{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
+.net-value{font-family:var(--font);font-size:1.05rem;font-weight:700}
+
+/* ── Action buttons ── */
+.action-row{display:flex;gap:9px;margin-bottom:12px;flex-wrap:wrap}
+.pdf-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:7px;font-family:var(--font);font-size:.72rem;font-weight:500;cursor:pointer;border:1px solid;transition:all .15s;background:transparent}
+.pdf-btn-pay{color:var(--green);border-color:rgba(78,203,141,.38);background:rgba(78,203,141,.07)}
+.pdf-btn-pay:hover{background:rgba(78,203,141,.15);border-color:var(--green)}
+.pdf-btn-fee{color:var(--red);border-color:rgba(240,96,94,.38);background:rgba(240,96,94,.07)}
+.pdf-btn-fee:hover{background:rgba(240,96,94,.15);border-color:var(--red)}
+.edit-btn{color:var(--orange);border-color:rgba(240,144,64,.38);background:rgba(240,144,64,.07)}
+.edit-btn:hover{background:rgba(240,144,64,.15);border-color:var(--orange)}
+.pdf-btn svg{width:12px;height:12px;flex-shrink:0}
+
+/* ── Transaction table ── */
+.toggle-txn-btn{font-size:.7rem;color:var(--accent);background:none;border:none;cursor:pointer;font-family:var(--font);padding:0;text-decoration:underline;text-underline-offset:3px;margin-bottom:9px;display:block}
+.toggle-txn-btn:hover{color:#ffd040}
+.txn-table-wrap{overflow-x:auto;max-height:300px;overflow-y:auto;border-radius:7px;border:1px solid var(--border)}
+.txn-table{width:100%;border-collapse:collapse;font-size:.73rem}
+.txn-table th{background:var(--surface2);color:var(--muted);text-transform:uppercase;letter-spacing:.07em;font-size:.62rem;padding:7px 11px;text-align:left;position:sticky;top:0;z-index:1}
+.txn-table td{padding:6px 11px;border-top:1px solid rgba(255,255,255,.04)}
+.txn-table tr:hover td{background:rgba(255,255,255,.025)}
+.txn-table td.amount-pay{color:var(--green);font-weight:500}
+.txn-table td.amount-fee{color:var(--red)}
+.txn-del-btn{background:none;border:none;color:var(--muted2);cursor:pointer;font-size:.75rem;padding:2px 4px;border-radius:4px;line-height:1;transition:all .15s}
+.txn-del-btn:hover{color:var(--red);background:rgba(240,96,94,.12)}
+.type-chip{display:inline-block;font-size:.6rem;padding:2px 7px;border-radius:4px;text-transform:uppercase;font-weight:500;letter-spacing:.05em}
+.type-pay{background:rgba(78,203,141,.12);color:var(--green)}
+.type-fee{background:rgba(240,96,94,.12);color:var(--red)}
+
+/* ── Accounting bridge controls ── */
+.bridge-status{display:flex;align-items:center;gap:6px;font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.bstat-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:2px}
+.acct-row{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:12px;display:flex;flex-direction:column;gap:9px}
+.acct-line{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.acct-note{font-size:.72rem;color:var(--muted);font-style:italic}
+.acct-badge{font-size:.68rem;padding:3px 9px;border-radius:20px;font-weight:500;border:1px solid var(--border2);color:var(--muted)}
+.acct-badge.good{color:var(--green);border-color:rgba(52,211,153,.4);background:rgba(52,211,153,.08)}
+.acct-badge.warn{color:var(--orange);border-color:rgba(251,191,36,.4);background:rgba(251,191,36,.08)}
+.acct-badge.bad{color:var(--red);border-color:rgba(248,113,113,.4);background:rgba(248,113,113,.08)}
+.edt-btn-book{color:#052e16;background:var(--accent);border-color:var(--accent);font-weight:600}
+.edt-btn-book:hover{background:#6ee7b7;border-color:#6ee7b7}
+.edt-btn-book:disabled{opacity:.4;cursor:not-allowed}
+.pdf-btn.edt-btn-book{padding:7px 14px}
+.ready-badge{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:var(--green);color:#052e16;font-size:.72rem;font-weight:800;flex-shrink:0}
+.ambig-badge{font-size:.62rem;padding:2px 8px;border-radius:10px;font-weight:600;background:rgba(251,191,36,.12);color:var(--orange);border:1px solid rgba(251,191,36,.4);white-space:nowrap}
+.auto-btn{border-color:var(--accent2);color:var(--accent2);font-weight:600}
+.auto-btn:hover{background:rgba(56,189,248,.12);border-color:var(--accent2)}
+.book-all-btn{border-color:var(--accent);color:var(--accent);font-weight:600}
+.book-all-btn:hover:not(:disabled){background:rgba(52,211,153,.12);border-color:var(--accent)}
+.book-all-btn:disabled{opacity:.4;cursor:not-allowed}
+.ready-badge.booked{background:var(--accent2);color:#04263a}
+
+/* ── No data ── */
+.no-data{text-align:center;padding:70px 24px;color:var(--muted);font-size:.83rem}
+.no-data .big{font-family:var(--font);font-size:2.4rem;font-weight:800;color:var(--border);margin-bottom:10px}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="subtitle">myPOS · ZollTool · Lexware</div>
+    <h1>Convention <span>Clusters</span></h1>
+  </div>
+  <div id="bridgeStatus" class="bridge-status"></div>
+</header>
+
+<div class="upload-zone" id="uploadZone">
+  <div class="icon">📂</div>
+  <h3>Drop your XLS / XLSX / CSV file here</h3>
+  <p>Accepts <strong>myPOS Transaction History</strong>, <strong>myPOS Monthly Statement</strong>, <strong>Shopify Orders CSV</strong>, and <strong>Wise Transaction History</strong> — load multiple files, they are merged automatically</p>
+  <input type="file" id="fileInput" accept=".xls,.xlsx,.csv">
+</div>
+<div id="resetBar" style="display:none;text-align:right;margin-bottom:8px">
+  <button onclick="resetAll()" style="background:none;border:1px solid var(--border2);border-radius:6px;color:var(--muted);font-family:var(--font);font-size:.7rem;padding:4px 12px;cursor:pointer" onmouseover="this.style.color='var(--red)';this.style.borderColor='var(--red)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border2)'">✕ Clear all data</button>
+</div>
+
+<div id="output">
+  <div class="summary-bar" id="summaryBar"></div>
+  <div class="toolbar" id="filters"></div>
+  <div class="clusters-grid" id="clustersGrid"></div>
+</div>
+<div class="no-data" id="noData" style="display:none"><div class="big">∅</div><div>No clusters match the current filter.</div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script>
+// ════════════════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════════════════
+let allClusters = [];   // master list, sorted by startDate desc
+let filterDevice = 'all';
+let openClusters = new Set(); // uids of expanded cards
+
+function resetAll() {
+  if (!confirm('Clear all loaded data and start fresh?')) return;
+  allClusters = [];
+  filterDevice = 'all';
+  openClusters.clear();
+  tidToName = {};
+  editingUID = null;
+  document.getElementById('output').style.display = 'none';
+  document.getElementById('noData').style.display = 'none';
+  document.getElementById('resetBar').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+  uploadZone.classList.remove('compact');
+}
+
+// ════════════════════════════════════════════════════════════════
+// UPLOAD
+// ════════════════════════════════════════════════════════════════
+const uploadZone = document.getElementById('uploadZone');
+const fileInput  = document.getElementById('fileInput');
+uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => { e.preventDefault(); uploadZone.classList.remove('dragover'); handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+
+function handleFile(file) {
+  if (!file) return;
+  const isCSV = file.name.toLowerCase().endsWith('.csv');
+  const reader = new FileReader();
+  if (isCSV) {
+    // Read CSV as text — SheetJS can mangle dates/numbers when reading CSV as binary
+    reader.onload = e => {
+      const wb = XLSX.read(e.target.result, { type:'string', raw:true });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      parseData(XLSX.utils.sheet_to_json(sheet, { header:1, defval:'', raw:true }));
+    };
+    reader.readAsText(file);
+  } else {
+    reader.onload = e => {
+      const wb = XLSX.read(e.target.result, { type:'array', cellDates:true });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      parseData(XLSX.utils.sheet_to_json(sheet, { header:1, defval:'' }));
+    };
+    reader.readAsArrayBuffer(file);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// PARSE — detects Transaction Export / Monthly Statement / Shopify
+// ════════════════════════════════════════════════════════════════
+
+// TID → friendly name map, populated when a transaction export is loaded first
+let tidToName = {};
+
+function parseDate(v) {
+  if (!v && v !== 0) return null;
+  if (v instanceof Date) return v;
+  const s = String(v).trim();
+  if (!s || s === 'NaN' || s === 'null' || s === 'undefined') return null;
+  // DD.MM.YYYY HH:MM (myPOS with time)
+  const m1 = s.match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})/);
+  if (m1) return new Date(+m1[3],+m1[2]-1,+m1[1],+m1[4],+m1[5]);
+  // DD.MM.YYYY (myPOS date-only, used on Payment rows for date_settled)
+  const m3 = s.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (m3) return new Date(+m3[3],+m3[2]-1,+m3[1],12,0); // noon to avoid timezone edge cases
+  // YYYY-MM-DD HH:MM:SS +ZZZZ (Shopify / Wise)
+  const m2 = s.match(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})/);
+  if (m2) return new Date(m2[1].replace(' ','T'));
+  return null;
+}
+
+function col(obj,...names){ for(const n of names){ const v=obj[n]; if(v!==undefined&&v!==null&&v!==''&&String(v).toLowerCase()!=='nan') return v; } return ''; }
+
+function parseData(raw) {
+  const hi = raw.findIndex(r => r.some(c => {
+    const s = String(c).trim().toLowerCase().replace(/^"|"$/g,''); // strip surrounding quotes
+    return s === 'type' || s === 'financial status' || s === 'direction' || s === 'status';
+  }));
+  if (hi < 0) { alert('Cannot recognise file format — unrecognised column headers.'); return; }
+  // Strip surrounding quotes from header names (Wise CSV wraps many in quotes)
+  const headers = raw[hi].map(h => String(h).trim().replace(/^"|"$/g,'').toLowerCase().replace(/\s+/g,'_'));
+  const rows = raw.slice(hi+1).filter(r => !r.every(c => c===''||c==null))
+    .map(r => Object.fromEntries(headers.map((h,j)=>[h, typeof r[j]==='string' ? r[j].replace(/^"|"$/g,'') : r[j]])));
+
+  // Detect format
+  const isShopify   = headers.includes('financial_status') && headers.includes('paid_at') && headers.includes('lineitem_name');
+  const isStatement = !isShopify && headers.includes('credit') && headers.includes('debit') && headers.includes('tid');
+  const isWise      = !isShopify && !isStatement && headers.includes('direction') && headers.includes('target_amount_(after_fees)');
+
+  if (isShopify)        parseShopify(rows);
+  else if (isStatement) parseStatement(rows);
+  else if (isWise)      parseWise(rows);
+  else                  parseTransactionExport(rows);
+}
+
+function parseTransactionExport(rows) {
+  const txns = rows.map(r => {
+    const date     = parseDate(col(r,'date_initiated','date initiated'))
+                || parseDate(col(r,'date_settled','date settled'));
+    const amount   = parseFloat(String(col(r,'amount')).replace(',','.')) || 0;
+    const terminal = String(col(r,'terminal_name')).trim();
+    const tm = String(col(r,'description')).match(/TID\s+(\d+)/);
+    if (tm && terminal) tidToName[tm[1]] = tidToName[tm[1]] || terminal;
+    return {
+      id: Math.random().toString(36).slice(2),
+      date, type: String(col(r,'type')).trim(), amount,
+      currency: String(col(r,'currency')).trim() || 'EUR',
+      terminal,
+      card: String(col(r,'payment_from_card')).trim(),
+      ref:  String(col(r,'transaction_reference','transaction reference')).trim(),
+      desc: String(col(r,'description')).trim(),
+      source: 'mypos',
+    };
+  }).filter(t => t.date && (t.type==='Payment'||t.type==='Fee') && t.terminal!=='');
+  mergeClusters(txns);
+}
+
+function parseStatement(rows) {
+  const txns = rows.map(r => {
+    const type       = String(col(r,'type')).trim();
+    const orderedVia = String(col(r,'ordered_via')).trim();
+    if (!['Payment','Fee'].includes(type)) return null;
+    if (!['myPOS','System'].includes(orderedVia)) return null;
+    const tidRaw = col(r,'tid');
+    const tid    = String(Math.round(Number(tidRaw)));
+    if (!tid || tid==='NaN' || tid==='0' || tid==='') return null;
+    const date   = parseDate(col(r,'value_date'));
+    const credit = parseFloat(String(col(r,'credit')).replace(',','.')) || 0;
+    const debit  = parseFloat(String(col(r,'debit')).replace(',','.'))  || 0;
+    const amount = type==='Payment' ? credit : -debit;
+    const terminal = tidToName[tid] || `TID ${tid}`;
+    return {
+      id: Math.random().toString(36).slice(2),
+      date, type, amount, currency: 'EUR',
+      terminal, card: '',
+      ref:  String(col(r,'mypos_reference')).trim(),
+      desc: String(col(r,'description')).trim(),
+      source: 'mypos',
+    };
+  }).filter(Boolean).filter(t => t.date);
+  if (!txns.length) { alert('No valid myPOS terminal rows found in the statement.'); return; }
+  mergeClusters(txns);
+}
+
+function parseShopify(rows) {
+  // Shopify exports one row per line item; deduplicate on order Name + Paid at
+  // Only process paid orders, skip line-item-only rows (no Financial Status)
+  const seen = new Set();
+  const txns = rows.map(r => {
+    const status = String(col(r,'financial_status')).trim().toLowerCase();
+    if (!['paid','refunded','partially_refunded'].includes(status)) return null;
+
+    const name = String(col(r,'name')).trim(); // order number e.g. #3562
+    if (seen.has(name)) return null;
+    seen.add(name);
+
+    const date = parseDate(col(r,'paid_at'));
+    if (!date) return null;
+
+    const total    = parseFloat(String(col(r,'total')).replace(',','.')) || 0;
+    const refunded = parseFloat(String(col(r,'refunded_amount')).replace(',','.')) || 0;
+    const amount   = total - refunded; // net of any refunds
+
+    // Terminal = Location name; no location = online order
+    const location = String(col(r,'location')).trim();
+    const isOnline = !location;
+    const terminal = location || 'Shopify Online';
+
+    const paymentMethod = String(col(r,'payment_method')).trim();
+    const isManual = ['manual','custom (pos)'].includes(paymentMethod.toLowerCase());
+
+    return {
+      id: Math.random().toString(36).slice(2),
+      date, type: 'Payment', amount,
+      currency: String(col(r,'currency')).trim() || 'EUR',
+      terminal,
+      card: paymentMethod,
+      ref:  name,
+      desc: `Shopify order ${name}`,
+      source: 'shopify',
+      orderNum: name,
+      isManual,
+      isOnline,
+    };
+  }).filter(Boolean).filter(t => t.amount > 0);
+
+  if (!txns.length) { alert('No paid Shopify orders found in this file.'); return; }
+  mergeClusters(txns);
+}
+
+
+function parseWise(rows) {
+  // Wise transaction history: one row per transfer
+  // We only care about incoming completed transfers (payments received)
+  const txns = rows.map(r => {
+    const status    = String(col(r,'status')).trim().toUpperCase();
+    const direction = String(col(r,'direction')).trim().toUpperCase();
+    if (status !== 'COMPLETED' || direction !== 'IN') return null;
+
+    const date = parseDate(col(r,'finished_on') || col(r,'created_on'));
+    if (!date) return null;
+
+    const amount   = parseFloat(String(col(r,'target_amount_(after_fees)')).replace(',','.')) || 0;
+    const currency = String(col(r,'target_currency')).trim() || 'EUR';
+    const sender   = String(col(r,'source_name')).trim();
+    const ref      = String(col(r,'id')).trim();
+    const note     = String(col(r,'note')||col(r,'reference')||'').trim();
+
+    // Fees: Wise shows source fee in source currency — record separately if non-zero
+    const feeAmt = parseFloat(String(col(r,'source_fee_amount')).replace(',','.')) || 0;
+
+    return {
+      id: Math.random().toString(36).slice(2),
+      date, type: 'Payment', amount,
+      currency,
+      terminal: 'Wise',
+      card: sender,   // re-use card field to store sender name
+      ref,
+      desc: note ? `Wise transfer — ${note}` : `Wise transfer from ${sender}`,
+      source: 'wise',
+      feeAmt,         // stored for potential future use; Wise fees rarely apply
+    };
+  }).filter(Boolean).filter(t => t.amount > 0);
+
+  if (!txns.length) { alert('No completed incoming Wise transfers found in this file.'); return; }
+  mergeClusters(txns);
+}
+
+// ════════════════════════════════════════════════════════════════
+// CLUSTER BUILD
+// ════════════════════════════════════════════════════════════════
+
+// mergeClusters: cluster new txns and merge into any existing clusters
+function mergeClusters(txns, gapDays=1.5) {
+  // Split online orders out — they get monthly clusters, not gap-based
+  const onlineTxns = txns.filter(t => t.isOnline);
+  const posTxns    = txns.filter(t => !t.isOnline);
+
+  const newClusters = [
+    ...clusterTxns(posTxns, gapDays),
+    ...clusterOnlineByMonth(onlineTxns),
+  ];
+
+  if (!allClusters.length) {
+    allClusters = newClusters;
+  } else {
+    for (const nc of newClusters) {
+      const existing = allClusters.find(ec =>
+        ec.device === nc.device &&
+        ec.startDate <= nc.endDate && ec.endDate >= nc.startDate
+      );
+      if (existing) {
+        const existingRefs = new Set(existing.txns.map(t=>t.ref).filter(Boolean));
+        const newTxns = nc.txns.filter(t => !t.ref || !existingRefs.has(t.ref));
+        existing.txns = [...existing.txns, ...newTxns];
+        Object.assign(existing, deriveClusterStats(existing.txns, existing.device));
+      } else {
+        allClusters.push(nc);
+      }
+    }
+  }
+
+  allClusters.sort((a,b)=>b.startDate-a.startDate);
+  assignClusterIDs(allClusters);
+  render();
+}
+
+// Group online Shopify orders into one cluster per calendar month
+function clusterOnlineByMonth(txns) {
+  if (!txns.length) return [];
+  const byMonth = {};
+  for (const t of txns) {
+    const key = `${t.date.getFullYear()}-${String(t.date.getMonth()+1).padStart(2,'0')}`;
+    (byMonth[key] = byMonth[key] || []).push(t);
+  }
+  return Object.entries(byMonth).map(([key, mTxns]) => {
+    const c = makeCluster('Shopify Online', mTxns);
+    c.isOnlineCluster = true;
+    c.monthKey = key;
+    return c;
+  });
+}
+
+function clusterTxns(txns, gapDays=1.5) {
+  const byDevice = {};
+  for (const t of txns) (byDevice[t.terminal]=byDevice[t.terminal]||[]).push(t);
+
+  const GAP = gapDays * 24 * 3600000;
+  const raw = [];
+  for (const dev of Object.keys(byDevice).sort()) {
+    const sorted = byDevice[dev].sort((a,b)=>a.date-b.date);
+    let group = [sorted[0]];
+    for (let i=1;i<sorted.length;i++) {
+      if (sorted[i].date - sorted[i-1].date > GAP) { raw.push(makeCluster(dev,group)); group=[]; }
+      group.push(sorted[i]);
+    }
+    if (group.length) raw.push(makeCluster(dev,group));
+  }
+  return raw;
+}
+
+function makeCluster(device, txns) {
+  return {
+    uid: Math.random().toString(36).slice(2),
+    device, txns,
+    customName: '',
+    cashAmount: 0,
+    cashNote: '',
+    // derived:
+    ...deriveClusterStats(txns, device),
+  };
+}
+
+function deriveClusterStats(txns, device) {
+  const sorted   = [...txns].sort((a,b)=>a.date-b.date);
+  const payments = sorted.filter(t=>t.type==='Payment');
+  const fees     = sorted.filter(t=>t.type==='Fee');
+  const totalPay = payments.reduce((s,t)=>s+t.amount,0);
+  const totalFee = Math.abs(fees.reduce((s,t)=>s+t.amount,0));
+  return { payments, fees, totalPay, totalFee, net:totalPay-totalFee,
+           startDate:sorted[0].date, endDate:sorted[sorted.length-1].date };
+}
+
+// ── Assign PN_YYYY_MM_NNN IDs (counter per year-month) ──
+function assignClusterIDs(clusters) {
+  const asc = [...clusters].reverse();
+  const counter = {};
+  for (const c of asc) {
+    const yr = c.startDate.getFullYear();
+    const mo = String(c.startDate.getMonth()+1).padStart(2,'0');
+    if (c.isOnlineCluster) {
+      // Online clusters get a fixed ONL suffix — one per month, no counter needed
+      c.clusterID = `PN_${yr}_${mo}_ONL`;
+    } else {
+      const key = `${yr}-${mo}`;
+      counter[key] = (counter[key]||0) + 1;
+      c.clusterID = `PN_${yr}_${mo}_${String(counter[key]).padStart(3,'0')}`;
+    }
+  }
+}
+
+// Recalculate after manual edits
+function recalcCluster(c) {
+  const s = deriveClusterStats(c.txns, c.device);
+  Object.assign(c, s);
+  assignClusterIDs(allClusters); // IDs may shift
+}
+
+// ════════════════════════════════════════════════════════════════
+// FORMAT HELPERS
+// ════════════════════════════════════════════════════════════════
+function fmtDate(d){ return d?d.toLocaleDateString('nl-BE',{day:'2-digit',month:'short',year:'numeric'}):'–'; }
+function fmtDateTime(d){ return d?d.toLocaleDateString('nl-BE',{day:'2-digit',month:'short'})+' '+d.toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'}):'–'; }
+function fmtAmt(n){ return 'EUR '+n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,','); }
+function n2(n){ return n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,','); }
+function safeStr(s){ return s.replace(/[^a-zA-Z0-9_\-]/g,'_'); }
+
+// ════════════════════════════════════════════════════════════════
+// PDF EXPORT
+// ════════════════════════════════════════════════════════════════
+function exportPDF(uid, mode, opts) {
+  const c = allClusters.find(x=>x.uid===uid);
+  if (!c) return;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const isPay = mode==='payments';
+  const txns  = [...(isPay?c.payments:c.fees)].sort((a,b)=>a.date-b.date);
+  const suffix = isPay ? 'P' : 'F';
+  const docID  = `${c.clusterID}_${suffix}`;
+
+  const MW=210,MG=18,CW=MW-MG*2;
+  const C_DARK  =[28,28,33];
+  const C_WHITE =[255,255,255];
+  const C_ACCENT= isPay?[34,139,87]:[185,55,53];
+  const C_BLUE  =[50,90,190];
+  const C_RULE  =[215,215,222];
+  const C_MUTED =[130,130,145];
+  const C_BLACK =[28,28,33];
+  const C_ALT   =[249,249,251];
+
+  const dateRange   = fmtDate(c.startDate)+(fmtDate(c.startDate)!==fmtDate(c.endDate)?' - '+fmtDate(c.endDate):'');
+  const genOn       = new Date().toLocaleDateString('nl-BE',{day:'2-digit',month:'long',year:'numeric'});
+  const displayName = c.customName ? `${c.customName}` : dateRange;
+
+  // ── header band ──
+  doc.setFillColor(...C_DARK);
+  doc.rect(0,0,MW,34,'F');
+  doc.setFillColor(...C_ACCENT);
+  doc.rect(0,0,4,34,'F');
+
+  // doc ID top-right
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(8);
+  doc.setTextColor(180,180,200);
+  doc.text(docID, MW-MG, 9, {align:'right'});
+
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(15);
+  doc.setTextColor(...C_WHITE);
+  doc.text(isPay?'PAYMENTS REPORT':'FEES REPORT', MG, 14);
+
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(8);
+  doc.setTextColor(175,175,195);
+  doc.text(displayName+' | '+c.device, MG, 21);
+  if (c.customName) {
+    doc.setFontSize(7.5);
+    doc.setTextColor(150,150,170);
+    doc.text(dateRange, MG, 26.5);
+  }
+  doc.setFontSize(7.5);
+  doc.setTextColor(130,130,155);
+  doc.text('Generated: '+genOn, MG, 31);
+
+  // ── summary boxes ──
+  let y=42;
+  const bW=(CW-8)/3;
+
+  function sBox(x,label,value,sub,valCol){
+    doc.setDrawColor(...C_RULE);
+    doc.setFillColor(250,250,252);
+    doc.roundedRect(x,y,bW,24,2,2,'FD');
+    doc.setFont('helvetica','normal');doc.setFontSize(6.5);doc.setTextColor(...C_MUTED);
+    doc.text(label.toUpperCase(),x+4,y+7);
+    doc.setFont('helvetica','bold');doc.setFontSize(11.5);doc.setTextColor(...valCol);
+    doc.text(value,x+4,y+16);
+    if(sub){doc.setFont('helvetica','normal');doc.setFontSize(6.5);doc.setTextColor(...C_MUTED);doc.text(sub,x+4,y+21);}
+  }
+
+  const cash = c.cashAmount || 0;
+  const grandTotal = c.totalPay + cash;
+
+  if (isPay) {
+    const avg = txns.length ? c.totalPay/txns.length : 0;
+    const hi  = txns.length ? Math.max(...txns.map(t=>t.amount)) : 0;
+    if (cash) {
+      // 3-box row: card revenue | cash | grand total
+      sBox(MG,          'Card Revenue',  'EUR '+n2(c.totalPay), txns.length+' transactions', C_ACCENT);
+      sBox(MG+bW+4,     'Cash Sales',   'EUR '+n2(cash),        c.cashNote||'manual entry',  [120,80,200]);
+      sBox(MG+(bW+4)*2, 'Total Revenue','EUR '+n2(grandTotal),  'card + cash',               C_ACCENT);
+    } else {
+      sBox(MG,          'Total Revenue','EUR '+n2(c.totalPay), txns.length+' transactions', C_ACCENT);
+      sBox(MG+bW+4,     'Average',      'EUR '+n2(avg),        '',                           C_BLACK);
+      sBox(MG+(bW+4)*2, 'Highest',      'EUR '+n2(hi),         '',                           C_BLACK);
+    }
+  } else {
+    const rate = grandTotal>0 ? ((c.totalFee/grandTotal)*100).toFixed(2)+'%' : '0.00%';
+    sBox(MG,          'Total Fees',  'EUR '+n2(c.totalFee), txns.length+' entries',  C_ACCENT);
+    sBox(MG+bW+4,     'Fee Rate',    rate,                  'of total revenue',       C_BLACK);
+    sBox(MG+(bW+4)*2, 'Net Revenue', 'EUR '+n2(grandTotal-c.totalFee), 'after fees', C_BLUE);
+  }
+
+  y+=32;
+  doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...C_MUTED);
+  doc.text('TRANSACTION DETAIL',MG,y);
+  doc.setDrawColor(...C_RULE);doc.line(MG,y+2,MW-MG,y+2);
+  y+=8;
+
+  const columns = isPay
+    ? [{header:'Date & Time',dataKey:'dt'},{header:'Card',dataKey:'card'},{header:'Reference',dataKey:'ref'},{header:'Amount (EUR)',dataKey:'amt'}]
+    : [{header:'Date & Time',dataKey:'dt'},{header:'Reference',dataKey:'ref'},{header:'Description',dataKey:'desc'},{header:'Fee (EUR)',dataKey:'amt'}];
+
+  const body = txns.map(t=>({
+    dt:   fmtDateTime(t.date),
+    card: t.card||'-',
+    ref:  t.ref ?t.ref.substring(0,22):'-',
+    desc: t.desc?t.desc.substring(0,50):'-',
+    amt:  n2(Math.abs(t.amount)),
+  }));
+
+  // Append cash as a manual row at the bottom of the payments table
+  if (isPay && cash) {
+    body.push({
+      dt:   c.cashNote ? `Cash — ${c.cashNote}` : 'Cash sales',
+      card: 'Cash',
+      ref:  'Manual entry',
+      desc: '-',
+      amt:  n2(cash),
+    });
+  }
+
+  doc.autoTable({
+    startY:y, columns, body,
+    margin:{left:MG,right:MG},
+    styles:{font:'helvetica',fontSize:8,cellPadding:{top:3.5,bottom:3.5,left:4,right:4},textColor:C_BLACK,lineColor:C_RULE,lineWidth:.18,overflow:'ellipsize'},
+    headStyles:{fillColor:C_DARK,textColor:C_WHITE,fontStyle:'bold',fontSize:7.5},
+    alternateRowStyles:{fillColor:C_ALT},
+    columnStyles:{amt:{halign:'right',fontStyle:'bold',textColor:C_ACCENT}},
+    // Highlight the cash row
+    didParseCell: (data) => {
+      if (isPay && cash && data.row.index === body.length - 1) {
+        data.cell.styles.fillColor = [245, 240, 255];
+        data.cell.styles.textColor = [100, 60, 180];
+        data.cell.styles.fontStyle = 'bold';
+      }
+    },
+    didDrawPage:()=>{
+      const pg=doc.internal.getCurrentPageInfo().pageNumber;
+      doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(...C_MUTED);
+      doc.setDrawColor(...C_RULE);doc.line(MG,286,MW-MG,286);
+      doc.text(docID+'  |  '+c.device+'  |  '+dateRange,MG,290);
+      doc.text('p. '+pg,MW-MG,290,{align:'right'});
+    },
+  });
+
+  const fy=doc.lastAutoTable.finalY+5;
+  if(fy<268){
+    doc.setFillColor(...C_DARK);doc.rect(MG,fy,CW,11,'F');
+    doc.setFillColor(...C_ACCENT);doc.rect(MG,fy,3,11,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...C_WHITE);
+    doc.text(isPay?'TOTAL PAYMENTS':'TOTAL FEES',MG+7,fy+7.5);
+    // Payments total includes cash
+    doc.text('EUR '+(isPay?n2(grandTotal):n2(c.totalFee)),MW-MG-3,fy+7.5,{align:'right'});
+  }
+
+  if (opts && opts.returnBase64) return doc.output('datauristring').split(',')[1];
+  doc.save(safeStr(docID)+'.pdf');
+}
+
+// ════════════════════════════════════════════════════════════════
+// CLUSTER EDITING
+// ════════════════════════════════════════════════════════════════
+let editingUID = null;  // which cluster is in edit mode
+
+function openEdit(uid) {
+  if (editingUID === uid) { closeEdit(); return; }
+  editingUID = uid;
+  openClusters.add(uid); // ensure card stays open
+  render();
+}
+function closeEdit() { editingUID = null; render(); }
+
+function applyName(uid) {
+  const c = allClusters.find(x=>x.uid===uid);
+  if (!c) return;
+  c.customName = document.getElementById(`name-input-${uid}`).value.trim();
+  const ci = document.getElementById(`country-input-${uid}`);
+  if (ci) c.country = ci.value.trim();
+  render();
+}
+
+function applyCash(uid) {
+  const c = allClusters.find(x=>x.uid===uid);
+  if (!c) return;
+  const raw = document.getElementById(`cash-amount-${uid}`).value.trim().replace(',','.');
+  const amt = parseFloat(raw);
+  if (raw !== '' && isNaN(amt)) { alert('Enter a valid amount (e.g. 125.50)'); return; }
+  c.cashAmount = isNaN(amt) ? 0 : Math.max(0, amt);
+  c.cashNote   = document.getElementById(`cash-note-${uid}`).value.trim();
+  render();
+}
+
+function splitAtDate(uid) {
+  const c = allClusters.find(x=>x.uid===uid);
+  if (!c) return;
+  const val = document.getElementById(`date-split-${uid}`).value;
+  if (!val) { alert('Pick a split date first.'); return; }
+  const splitDate = new Date(val);
+  const txnsA = c.txns.filter(t => t.date < splitDate);
+  const txnsB = c.txns.filter(t => t.date >= splitDate);
+  if (!txnsA.length || !txnsB.length) { alert('All transactions fall on one side of that date — pick a date within the cluster range.'); return; }
+  const newA = makeCluster(c.device, txnsA);
+  newA.customName = c.customName ? c.customName + ' (1)' : '';
+  const newB = makeCluster(c.device, txnsB);
+  newB.customName = c.customName ? c.customName + ' (2)' : '';
+  const rest = allClusters.filter(x=>x.uid!==uid);
+  const merged = [...rest, newA, newB].sort((a,b)=>b.startDate-a.startDate);
+  assignClusterIDs(merged);
+  allClusters = merged;
+  editingUID = null;
+  render();
+}
+
+function splitCluster(uid) {
+  const c = allClusters.find(x=>x.uid===uid);
+  if (!c) return;
+  // get checked txn ids
+  const checked = [...document.querySelectorAll(`#split-sel-${uid} input[type=checkbox]:checked`)].map(el=>el.value);
+  if (!checked.length || checked.length===c.txns.length) { alert('Select some (but not all) transactions to split into a new cluster.'); return; }
+  const setA = new Set(checked);
+  const txnsA = c.txns.filter(t=>setA.has(t.id));
+  const txnsB = c.txns.filter(t=>!setA.has(t.id));
+  const newA = makeCluster(c.device, txnsA);
+  newA.customName = c.customName ? c.customName+' (split)' : '';
+  const newB = makeCluster(c.device, txnsB);
+  newB.customName = c.customName;
+  const rest = allClusters.filter(x=>x.uid!==uid);
+  const merged=[...rest,newA,newB].sort((a,b)=>b.startDate-a.startDate);
+  assignClusterIDs(merged);
+  allClusters=merged;
+  editingUID=null;
+  render();
+}
+
+function mergeWithNext(uid) {
+  const idx = allClusters.findIndex(x=>x.uid===uid);
+  if (idx<0||idx>=allClusters.length-1) { alert('No next cluster to merge with.'); return; }
+  const ca=allClusters[idx], cb=allClusters[idx+1];
+  if (ca.device!==cb.device) { alert('Can only merge clusters from the same device.'); return; }
+  const merged_c = makeCluster(ca.device,[...ca.txns,...cb.txns]);
+  merged_c.customName  = ca.customName||cb.customName;
+  merged_c.cashAmount  = (ca.cashAmount||0) + (cb.cashAmount||0);
+  merged_c.cashNote    = [ca.cashNote,cb.cashNote].filter(Boolean).join(', ');
+  const rest=[...allClusters];
+  rest.splice(idx,2,merged_c);
+  rest.sort((a,b)=>b.startDate-a.startDate);
+  assignClusterIDs(rest);
+  allClusters=rest;
+  editingUID=null;
+  render();
+}
+
+function deleteCluster(uid) {
+  if(!confirm('Delete this cluster? Its transactions will be lost from the view.')) return;
+  allClusters=allClusters.filter(x=>x.uid!==uid);
+  assignClusterIDs(allClusters);
+  editingUID=null;
+  render();
+}
+
+function deleteTransaction(clusterUid, txnId) {
+  const c = allClusters.find(x=>x.uid===clusterUid);
+  if (!c) return;
+  c.txns = c.txns.filter(t=>t.id!==txnId);
+  if (!c.txns.length) {
+    allClusters = allClusters.filter(x=>x.uid!==clusterUid);
+    assignClusterIDs(allClusters);
+    editingUID = null;
+  } else {
+    Object.assign(c, deriveClusterStats(c.txns, c.device));
+  }
+  render();
+}
+
+function removeManualOrders(uid) {
+  const c = allClusters.find(x=>x.uid===uid);
+  if (!c) return;
+  const manualCount = c.txns.filter(t=>t.isManual).length;
+  if (!manualCount) return;
+  if (!confirm(`Remove ${manualCount} manual payment order${manualCount!==1?'s':''} from this cluster?`)) return;
+  c.txns = c.txns.filter(t=>!t.isManual);
+  if (!c.txns.length) {
+    allClusters = allClusters.filter(x=>x.uid!==uid);
+    assignClusterIDs(allClusters);
+    editingUID = null;
+  } else {
+    Object.assign(c, deriveClusterStats(c.txns, c.device));
+  }
+  render();
+}
+
+function mergeSelected(uid) {
+  const sel = document.getElementById(`merge-sel-${uid}`);
+  if (!sel || !sel.value) { alert('Pick a cluster to merge with.'); return; }
+  mergeWithCluster(uid, sel.value);
+}
+
+function mergeWithCluster(uidA, uidB) {
+  const ca = allClusters.find(x=>x.uid===uidA);
+  const cb = allClusters.find(x=>x.uid===uidB);
+  if (!ca||!cb) return;
+  // Combined device label
+  const devices = [...new Set([ca.device, cb.device])];
+  const deviceLabel = devices.join(' + ');
+  const merged_c = makeCluster(deviceLabel, [...ca.txns,...cb.txns]);
+  merged_c.customName  = ca.customName || cb.customName;
+  merged_c.devices     = devices; // track constituent devices
+  merged_c.cashAmount  = (ca.cashAmount||0) + (cb.cashAmount||0);
+  merged_c.cashNote    = [ca.cashNote,cb.cashNote].filter(Boolean).join(', ');
+  const rest = allClusters.filter(x=>x.uid!==uidA&&x.uid!==uidB);
+  const all = [...rest, merged_c].sort((a,b)=>b.startDate-a.startDate);
+  assignClusterIDs(all);
+  allClusters = all;
+  editingUID = null;
+  render();
+}
+
+// month key (YYYY-MM) from a cluster's start date — matches clusterOnlineByMonth
+function clusterMonthKey(c){
+  return `${c.startDate.getFullYear()}-${String(c.startDate.getMonth()+1).padStart(2,'0')}`;
+}
+
+// ── Mark a POS cluster as online → auto-merge into that month's online bucket ──
+function markOnline(uid) {
+  const c = allClusters.find(x=>x.uid===uid);
+  if (!c || c.isOnlineCluster) return;
+  const mKey = clusterMonthKey(c);
+  // Existing online cluster in the same calendar month (Shopify monthly or a
+  // previously marked-online cluster) — fold this one into it.
+  const target = allClusters.find(x =>
+    x.uid !== uid && x.isOnlineCluster && clusterMonthKey(x) === mKey
+  );
+  if (target) {
+    const targetRefs = new Set(target.txns.map(t=>t.ref).filter(Boolean));
+    const newTxns = c.txns.filter(t => !t.ref || !targetRefs.has(t.ref));
+    target.txns = [...target.txns, ...newTxns];
+    target.cashAmount = (target.cashAmount||0) + (c.cashAmount||0);
+    target.cashNote   = [target.cashNote, c.cashNote].filter(Boolean).join(', ');
+    Object.assign(target, deriveClusterStats(target.txns, target.device));
+    allClusters = allClusters.filter(x=>x.uid!==uid);
+  } else {
+    // No online cluster this month yet — this cluster becomes it.
+    c.isOnlineCluster = true;
+    c.manualOnline    = true; // flag so it can be reverted while still POS-only
+    c.monthKey        = mKey;
+  }
+  allClusters.sort((a,b)=>b.startDate-a.startDate);
+  assignClusterIDs(allClusters);
+  editingUID = null;
+  render();
+}
+
+// ── Undo a manual mark-online (only safe while no Shopify orders were folded in) ──
+function revertOnline(uid) {
+  const c = allClusters.find(x=>x.uid===uid);
+  if (!c || !c.manualOnline) return;
+  c.isOnlineCluster = false;
+  c.manualOnline    = false;
+  delete c.monthKey;
+  allClusters.sort((a,b)=>b.startDate-a.startDate);
+  assignClusterIDs(allClusters);
+  render();
+}
+
+// ── Find clusters from other devices that overlap date-wise with this one ──
+function findOverlappingClusters(c) {
+  if (c.isOnlineCluster) return []; // online clusters never suggest merging
+  return allClusters.filter(other => {
+    if (other.uid === c.uid) return false;
+    if (other.device === c.device) return false;
+    if (other.isOnlineCluster) return false; // don't suggest merging POS with online
+    return other.startDate <= c.endDate && other.endDate >= c.startDate;
+  });
+}
+
+// ════════════════════════════════════════════════════════════════
+// MONTHLY PDF EXPORT
+// ════════════════════════════════════════════════════════════════
+function getMonthKey(d) {
+  return `${d.getFullYear()}_${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+function getMonthLabel(key) {
+  const [yr,mo] = key.split('_');
+  return new Date(+yr, +mo-1, 1).toLocaleDateString('nl-BE',{month:'long',year:'numeric'});
+}
+
+function groupByMonth(clusters) {
+  const map = {};
+  for (const c of clusters) {
+    const key = getMonthKey(c.startDate);
+    if (!map[key]) map[key] = [];
+    map[key].push(c);
+  }
+  return map;
+}
+
+function exportMonthPDF(monthKey, mode, opts) {
+  const clusters = allClusters.filter(c => getMonthKey(c.startDate) === monthKey);
+  if (!clusters.length) return;
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const isPay = mode === 'payments';
+  const suffix = isPay ? 'P' : 'F';
+  const docID = `PN_${monthKey}_${suffix}`;
+  const monthLabel = getMonthLabel(monthKey).toUpperCase();
+
+  const MW=210,MG=18,CW=MW-MG*2;
+  const C_DARK  =[28,28,33];
+  const C_WHITE =[255,255,255];
+  const C_ACCENT= isPay?[34,139,87]:[185,55,53];
+  const C_BLUE  =[50,90,190];
+  const C_RULE  =[215,215,222];
+  const C_MUTED =[130,130,145];
+  const C_BLACK =[28,28,33];
+  const C_ALT   =[249,249,251];
+  const C_STRIPE=[240,240,245];
+
+  const genOn = new Date().toLocaleDateString('nl-BE',{day:'2-digit',month:'long',year:'numeric'});
+
+  // Aggregate totals
+  const totalPay  = clusters.reduce((s,c)=>s+c.totalPay,0);
+  const totalCash = clusters.reduce((s,c)=>s+(c.cashAmount||0),0);
+  const totalFee  = clusters.reduce((s,c)=>s+c.totalFee,0);
+  const net = totalPay + totalCash - totalFee;
+  const allTxns = clusters.flatMap(c => isPay ? c.payments : c.fees)
+    .sort((a,b)=>a.date-b.date);
+
+  // ── Header ──
+  doc.setFillColor(...C_DARK);
+  doc.rect(0,0,MW,34,'F');
+  doc.setFillColor(...C_ACCENT);
+  doc.rect(0,0,4,34,'F');
+
+  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(180,180,200);
+  doc.text(docID, MW-MG, 9, {align:'right'});
+
+  doc.setFont('helvetica','bold');doc.setFontSize(15);doc.setTextColor(...C_WHITE);
+  doc.text((isPay?'PAYMENTS':'FEES')+' — '+monthLabel, MG, 14);
+
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(175,175,195);
+  doc.text(clusters.length+' cluster'+(clusters.length!==1?'s':'')+'  |  '+allTxns.length+' transactions', MG, 21);
+  doc.setFontSize(7.5);doc.setTextColor(130,130,155);
+  doc.text('Generated: '+genOn, MG, 27);
+
+  // ── Summary boxes ──
+  let y=42;
+  const bW=(CW-8)/3;
+  function sBox(x,label,value,sub,valCol){
+    doc.setDrawColor(...C_RULE);doc.setFillColor(250,250,252);
+    doc.roundedRect(x,y,bW,24,2,2,'FD');
+    doc.setFont('helvetica','normal');doc.setFontSize(6.5);doc.setTextColor(...C_MUTED);
+    doc.text(label.toUpperCase(),x+4,y+7);
+    doc.setFont('helvetica','bold');doc.setFontSize(11.5);doc.setTextColor(...valCol);
+    doc.text(value,x+4,y+16);
+    if(sub){doc.setFont('helvetica','normal');doc.setFontSize(6.5);doc.setTextColor(...C_MUTED);doc.text(sub,x+4,y+21);}
+  }
+  if (isPay) {
+    const avg = allTxns.length ? totalPay/allTxns.length : 0;
+    const hi  = allTxns.length ? Math.max(...allTxns.map(t=>t.amount)) : 0;
+    if (totalCash) {
+      sBox(MG,         'Card Revenue','EUR '+n2(totalPay),allTxns.length+' transactions',C_ACCENT);
+      sBox(MG+bW+4,    'Cash Sales',  'EUR '+n2(totalCash),'manual entries',[120,80,200]);
+      sBox(MG+(bW+4)*2,'Total Revenue','EUR '+n2(totalPay+totalCash),'card + cash',C_ACCENT);
+    } else {
+      sBox(MG,         'Total Revenue','EUR '+n2(totalPay),allTxns.length+' transactions',C_ACCENT);
+      sBox(MG+bW+4,    'Average','EUR '+n2(avg),'per transaction',C_BLACK);
+      sBox(MG+(bW+4)*2,'Highest','EUR '+n2(hi),'single transaction',C_BLACK);
+    }
+  } else {
+    const grandTotal = totalPay + totalCash;
+    const rate = grandTotal>0?((totalFee/grandTotal)*100).toFixed(2)+'%':'0.00%';
+    sBox(MG,         'Total Fees','EUR '+n2(totalFee),allTxns.length+' entries',C_ACCENT);
+    sBox(MG+bW+4,    'Fee Rate',rate,'of total revenue',C_BLACK);
+    sBox(MG+(bW+4)*2,'Net Revenue','EUR '+n2(grandTotal-totalFee),'after fees',C_BLUE);
+  }
+  y+=32;
+
+  // ── Cluster breakdown ──
+  doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...C_MUTED);
+  doc.text('CLUSTER BREAKDOWN',MG,y);
+  doc.setDrawColor(...C_RULE);doc.line(MG,y+2,MW-MG,y+2);
+  y+=7;
+
+  for (const c of [...clusters].sort((a,b)=>a.startDate-b.startDate)) {
+    const cTxns = isPay ? c.payments : c.fees;
+    const cTotal = isPay ? c.totalPay : c.totalFee;
+    const dr = c.isOnlineCluster ? 'Online orders' : fmtDate(c.startDate)+(fmtDate(c.startDate)!==fmtDate(c.endDate)?'–'+fmtDate(c.endDate):'');
+    const label = c.customName ? `${c.clusterID}  ${c.customName}` : c.clusterID;
+
+    const rowH = 13;
+    doc.setFillColor(246,246,250);
+    doc.rect(MG,y,CW,rowH,'F');
+    doc.setDrawColor(...C_RULE);doc.rect(MG,y,CW,rowH,'D');
+
+    // Left: cluster ID + name on first line
+    doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...C_BLACK);
+    doc.text(label,MG+4,y+5.5);
+    // Left: date range + device on second line
+    doc.setFont('helvetica','normal');doc.setFontSize(6.5);doc.setTextColor(...C_MUTED);
+    doc.text(dr+(c.isOnlineCluster?'':('  |  '+c.device)),MG+4,y+10.5);
+    // Right: total + count, vertically centred
+    doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...C_ACCENT);
+    doc.text('EUR '+n2(cTotal)+'  ('+cTxns.length+')',MW-MG-3,y+8,{align:'right'});
+    y+=rowH;
+  }
+  y+=6;
+
+  // ── Full transaction detail ──
+  doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...C_MUTED);
+  doc.text('FULL TRANSACTION DETAIL',MG,y);
+  doc.setDrawColor(...C_RULE);doc.line(MG,y+2,MW-MG,y+2);
+  y+=8;
+
+  const columns = isPay
+    ? [{header:'Date & Time',dataKey:'dt'},{header:'Cluster',dataKey:'cid'},{header:'Device',dataKey:'dev'},{header:'Card',dataKey:'card'},{header:'Amount (EUR)',dataKey:'amt'}]
+    : [{header:'Date & Time',dataKey:'dt'},{header:'Cluster',dataKey:'cid'},{header:'Reference',dataKey:'ref'},{header:'Fee (EUR)',dataKey:'amt'}];
+
+  // Build rows tagged with cluster
+  const clusterOf = {};
+  for (const c of clusters) for (const t of (isPay?c.payments:c.fees)) clusterOf[t.id]=c;
+
+  const body = allTxns.map(t => {
+    const cc = clusterOf[t.id];
+    return {
+      dt:   fmtDateTime(t.date),
+      cid:  cc ? cc.clusterID : '-',
+      dev:  cc ? cc.device.split(' + ')[0] : '-',
+      card: t.card||'-',
+      ref:  t.ref?t.ref.substring(0,18):'-',
+      amt:  n2(Math.abs(t.amount)),
+    };
+  });
+
+  // Append one cash row per cluster that has cash (payments report only)
+  const cashRows = [];
+  if (isPay) {
+    for (const c of [...clusters].sort((a,b)=>a.startDate-b.startDate)) {
+      if (c.cashAmount) {
+        body.push({
+          dt:   c.cashNote ? `Cash — ${c.cashNote}` : 'Cash sales',
+          cid:  c.clusterID,
+          dev:  'Cash',
+          card: 'Cash',
+          ref:  'Manual entry',
+          amt:  n2(c.cashAmount),
+        });
+        cashRows.push(body.length - 1);
+      }
+    }
+  }
+
+  doc.autoTable({
+    startY:y, columns, body,
+    margin:{left:MG,right:MG},
+    styles:{font:'helvetica',fontSize:7.5,cellPadding:{top:3,bottom:3,left:3,right:3},textColor:C_BLACK,lineColor:C_RULE,lineWidth:.15,overflow:'ellipsize'},
+    headStyles:{fillColor:C_DARK,textColor:C_WHITE,fontStyle:'bold',fontSize:7},
+    alternateRowStyles:{fillColor:C_ALT},
+    columnStyles:{amt:{halign:'right',fontStyle:'bold',textColor:C_ACCENT}},
+    didParseCell: (data) => {
+      if (cashRows.includes(data.row.index)) {
+        data.cell.styles.fillColor = [245,240,255];
+        data.cell.styles.textColor = [100,60,180];
+        data.cell.styles.fontStyle = 'bold';
+      }
+    },
+    didDrawPage:()=>{
+      const pg=doc.internal.getCurrentPageInfo().pageNumber;
+      doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(...C_MUTED);
+      doc.setDrawColor(...C_RULE);doc.line(MG,286,MW-MG,286);
+      doc.text(docID+'  |  '+monthLabel,MG,290);
+      doc.text('p. '+pg,MW-MG,290,{align:'right'});
+    },
+  });
+
+  const fy=doc.lastAutoTable.finalY+5;
+  if(fy<268){
+    doc.setFillColor(...C_DARK);doc.rect(MG,fy,CW,11,'F');
+    doc.setFillColor(...C_ACCENT);doc.rect(MG,fy,3,11,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...C_WHITE);
+    doc.text(isPay?'TOTAL PAYMENTS FOR '+monthLabel:'TOTAL FEES FOR '+monthLabel,MG+7,fy+7.5);
+    // Payments total includes cash
+    doc.text('EUR '+(isPay?n2(totalPay+totalCash):n2(totalFee)),MW-MG-3,fy+7.5,{align:'right'});
+  }
+
+  if (opts && opts.returnBase64) return doc.output('datauristring').split(',')[1];
+  doc.save(safeStr(docID)+'.pdf');
+}
+
+// ════════════════════════════════════════════════════════════════
+// RENDER
+// ════════════════════════════════════════════════════════════════
+function render() {
+  document.getElementById('output').style.display='block';
+  document.getElementById('noData').style.display='none';
+  uploadZone.classList.add('compact');
+  document.getElementById('resetBar').style.display='block';
+  const visible = filterDevice==='all' ? allClusters : allClusters.filter(c=>c.device===filterDevice);
+  renderSummary(visible);
+  renderFilters();
+  renderClusters(visible);
+}
+
+function renderSummary(clusters) {
+  const tP=clusters.reduce((s,c)=>s+c.totalPay,0);
+  const tC=clusters.reduce((s,c)=>s+(c.cashAmount||0),0);
+  const tF=clusters.reduce((s,c)=>s+c.totalFee,0);
+  const tT=clusters.reduce((s,c)=>s+c.payments.length,0);
+  const net=tP+tC-tF;
+  document.getElementById('summaryBar').innerHTML=`
+    <div class="stat-card"><div class="label">Card Revenue</div><div class="value green">${fmtAmt(tP)}</div></div>
+    ${tC?`<div class="stat-card"><div class="label">Cash Revenue</div><div class="value" style="color:#a78bfa">${fmtAmt(tC)}</div></div>`:''}
+    <div class="stat-card"><div class="label">Total Fees</div><div class="value red">-${fmtAmt(tF)}</div></div>
+    <div class="stat-card"><div class="label">Net</div><div class="value ${net>=0?'yellow':'red'}">${fmtAmt(net)}</div></div>
+    <div class="stat-card"><div class="label">Transactions</div><div class="value blue">${tT}</div></div>
+    <div class="stat-card"><div class="label">Clusters</div><div class="value">${clusters.length}</div></div>`;
+}
+
+function renderFilters() {
+  const devices=[...new Set(allClusters.map(c=>c.device))].sort();
+  let html=`<span class="filter-label">Device:</span>
+    <span class="pill ${filterDevice==='all'?'active':''}" onclick="setFilter('all')">All</span>`;
+  for(const d of devices){
+    const cls=/go/i.test(d)?'device-go2':'device-carbon';
+    html+=`<span class="pill ${cls} ${filterDevice===d?'active':''}" onclick="setFilter('${d}')">${d}</span>`;
+  }
+  const rightBtns=[];
+  if (window.bridge && (window.zollEvents||[]).length)
+    rightBtns.push(`<button class="pill auto-btn" onclick="autoMergeAndMatch()">✨ Auto merge &amp; match</button>`);
+  if (window.bridge && window.bridge.lexware && window.bridge.lexware.configured) {
+    const n = allClusters.filter(c=>!c.bookedVoucherId && clusterReady(c)).length;
+    rightBtns.push(`<button class="pill book-all-btn" ${n?'':'disabled'} onclick="bookAllReady()">⇪ Book all ready${n?` (${n})`:''}</button>`);
+  }
+  if (rightBtns.length) html += `<span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">${rightBtns.join('')}</span>`;
+  document.getElementById('filters').innerHTML=html;
+}
+function setFilter(v){filterDevice=v;render();}
+
+function renderClusters(clusters) {
+  const grid=document.getElementById('clustersGrid');
+  if(!clusters.length){grid.innerHTML='';document.getElementById('noData').style.display='block';return;}
+
+  // Group by month
+  const byMonth = groupByMonth(clusters);
+  const monthKeys = Object.keys(byMonth).sort().reverse();
+
+  let html = '';
+  for (const key of monthKeys) {
+    const mClusters = byMonth[key];
+    const mLabel = getMonthLabel(key);
+    const mPay  = mClusters.reduce((s,c)=>s+c.totalPay,0);
+    const mCash = mClusters.reduce((s,c)=>s+(c.cashAmount||0),0);
+    const mFee  = mClusters.reduce((s,c)=>s+c.totalFee,0);
+    const mNet  = mPay + mCash - mFee;
+    const docID = `PN_${key}`;
+    html += `
+    <div class="month-group">
+      <div class="month-header">
+        <div class="month-title">
+          <span class="month-id">${docID}</span>
+          ${mLabel}
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <div class="month-stats">
+            <span>Revenue <strong style="color:var(--green)">${fmtAmt(mPay)}</strong></span>
+            ${mClusters.some(c=>c.cashAmount)?`<span>Cash <strong style="color:#a78bfa">${fmtAmt(mClusters.reduce((s,c)=>s+(c.cashAmount||0),0))}</strong></span>`:''}
+            <span>Fees <strong style="color:var(--red)">-${fmtAmt(mFee)}</strong></span>
+            <span>Net <strong style="color:var(--accent)">${fmtAmt(mNet)}</strong></span>
+          </div>
+          <div class="month-export-row">
+            <button class="pdf-btn pdf-btn-month-p" onclick="exportMonthPDF('${key}','payments')">${ICON_PDF} ${docID}_P.pdf</button>
+            <button class="pdf-btn pdf-btn-month-f" onclick="exportMonthPDF('${key}','fees')">${ICON_PDF} ${docID}_F.pdf</button>
+            ${window.bridge && window.bridge.lexware && window.bridge.lexware.configured ? `<button class="pdf-btn edt-btn-book" onclick="bookMonthFees('${key}')">⇪ Book fees</button>` : ''}
+          </div>
+        </div>
+      </div>
+      <div class="month-divider"></div>
+      ${mClusters.map(renderCluster).join('')}
+    </div>`;
+  }
+
+  grid.innerHTML = html;
+
+  // restore open state and wire toggle
+  document.querySelectorAll('.cluster-card').forEach(card=>{
+    const uid=card.dataset.uid;
+    if(openClusters.has(uid)) card.classList.add('open');
+    card.querySelector('.cluster-header').addEventListener('click',()=>{
+      card.classList.toggle('open');
+      if(card.classList.contains('open')) openClusters.add(uid);
+      else openClusters.delete(uid);
+    });
+  });
+  // toggle txn table
+  document.querySelectorAll('.toggle-txn-btn').forEach(b=>
+    b.addEventListener('click',e=>{
+      e.stopPropagation();
+      const el=document.getElementById(b.dataset.target);
+      if(!el) return;
+      const open=el.style.display!=='none';
+      el.style.display=open?'none':'block';
+      b.textContent=open?'Show transactions ▾':'Hide transactions ▴';
+    }));
+}
+
+const ICON_PDF=`<svg viewBox="0 0 16 16" fill="none"><path d="M3 2a1 1 0 011-1h6l3 3v10a1 1 0 01-1 1H4a1 1 0 01-1-1V2z" stroke="currentColor" stroke-width="1.3"/><path d="M9 1v3h3M5 9h6M5 11.5h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
+const ICON_EDIT=`<svg viewBox="0 0 16 16" fill="none"><path d="M11 2l3 3-8 8H3v-3l8-8z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>`;
+
+function renderCluster(c) {
+  const isEditing = editingUID===c.uid;
+  const isShopifyCluster = c.txns.some(t=>t.source==='shopify');
+  const isWiseCluster    = c.txns.some(t=>t.source==='wise');
+  const badge = c.isOnlineCluster?'badge-online':isWiseCluster?'badge-wise':isShopifyCluster?'badge-shopify':/go/i.test(c.device)?'badge-go2':c.device==='POS Carbon'?'badge-carbon-old':'badge-carbon';
+  const dateRange = fmtDate(c.startDate)+(fmtDate(c.startDate)!==fmtDate(c.endDate)?' - '+fmtDate(c.endDate):'');
+  const feeRate = c.totalPay>0?((c.totalFee/c.totalPay)*100).toFixed(2):'0.00';
+  const txnId=`txn-${c.uid}`;
+
+  const allRows=[...c.txns].sort((a,b)=>a.date-b.date).map(t=>{
+    const ip=t.type==='Payment';
+    const isShop = t.source==='shopify';
+    const detail = isShop ? (t.orderNum||t.ref||'-') : (t.card||'-');
+    const detailLabel = isShop
+      ? `<span style="font-size:.65rem;color:var(--muted)">${detail}</span>`
+      : detail;
+    const manualTag = t.isManual ? '<span style="font-size:.58rem;margin-left:4px;color:#f0a040;border:1px solid rgba(240,160,64,.4);border-radius:3px;padding:1px 4px">manual</span>' : '';
+    const onlineTag = t.isOnline ? '<span style="font-size:.58rem;margin-left:4px;color:#60a0f0;border:1px solid rgba(100,160,240,.4);border-radius:3px;padding:1px 4px">online</span>' : '';
+    const wiseTag   = t.source==='wise' ? '<span style="font-size:.58rem;margin-left:4px;color:#00b478;border:1px solid rgba(0,180,120,.4);border-radius:3px;padding:1px 4px">Wise</span>' : '';
+    const rowStyle = t.isManual ? 'opacity:.55' : '';
+    return `<tr style="${rowStyle}"><td>${fmtDateTime(t.date)}</td><td><span class="type-chip ${ip?'type-pay':'type-fee'}">${t.type}</span>${isShop?'<span style="font-size:.58rem;margin-left:4px;color:#5db87a">Shopify</span>':''}${manualTag}${onlineTag}${wiseTag}</td><td class="${ip?'amount-pay':'amount-fee'}">${ip?'+':'-'}${fmtAmt(Math.abs(t.amount))}</td><td>${detailLabel}</td><td><button class="txn-del-btn" title="Remove transaction" onclick="event.stopPropagation();deleteTransaction('${c.uid}','${t.id}')">✕</button></td></tr>`;
+  }).join('');
+
+  // split selector rows (all txns, user picks which go to new cluster)
+  const splitRows=[...c.txns].sort((a,b)=>a.date-b.date).map(t=>{
+    const ip=t.type==='Payment';
+    return `<label class="txn-sel-row">
+      <input type="checkbox" value="${t.id}">
+      <span class="txn-sel-date">${fmtDateTime(t.date)}</span>
+      <span class="type-chip ${ip?'type-pay':'type-fee'}" style="font-size:.58rem">${t.type}</span>
+      <span class="txn-sel-amt ${ip?'pay':'fee'}">${ip?'+':'-'}${fmtAmt(Math.abs(t.amount))}</span>
+    </label>`;
+  }).join('');
+
+  // find adjacent same-device cluster for merge
+  const idx=allClusters.findIndex(x=>x.uid===c.uid);
+  const nextSameDev=allClusters.slice(idx+1).find(x=>x.device===c.device);
+  const canMergeNext=nextSameDev!=null;
+
+  // find overlapping clusters from OTHER devices
+  const overlapping = findOverlappingClusters(c);
+
+  // multi-device badge display
+  const deviceList = c.devices || [c.device];
+  const deviceBadges = c.isOnlineCluster
+    ? `<span class="device-badge badge-online">🌐 Online</span>`
+    : isWiseCluster
+    ? `<span class="device-badge badge-wise">💸 Wise</span>`
+    : deviceList.map(d => {
+        const bc = /go/i.test(d)?'badge-go2':d==='POS Carbon'?'badge-carbon-old':isShopifyCluster?'badge-shopify':'badge-carbon';
+        return `<span class="device-badge ${bc}">${d}</span>`;
+      }).join('');
+
+  // overlap merge banners (shown always when overlapping clusters exist)
+  const mergeBanners = overlapping.map(ov => `
+    <div class="merge-banner">
+      <span class="merge-banner-text">
+        <strong>${ov.clusterID}</strong> (${ov.device}) overlaps these dates — same event?
+      </span>
+      <button class="edt-btn edt-btn-merge" onclick="event.stopPropagation();mergeWithCluster('${c.uid}','${ov.uid}')">
+        Merge clusters
+      </button>
+    </div>`).join('');
+
+  // manual payment warning
+  const manualOrders = c.txns.filter(t=>t.isManual);
+  const manualWarning = manualOrders.length ? (() => {
+    const totalManual = manualOrders.reduce((s,t)=>s+t.amount,0);
+    const orderList = manualOrders.map(t=>`${t.orderNum} (${fmtAmt(t.amount)})`).join(', ');
+    return `
+    <div class="manual-warning">
+      <div>
+        <div class="manual-warning-text">
+          ⚠ <strong>${manualOrders.length} manual payment order${manualOrders.length!==1?'s':''} detected</strong> — ${fmtAmt(totalManual)} total.
+          These were likely paid via myPOS and may already appear in your card payments.
+        </div>
+        <div class="manual-warning-orders">${orderList}</div>
+      </div>
+      <button class="edt-btn edt-btn-warn" onclick="event.stopPropagation();removeManualOrders('${c.uid}')">
+        Remove from cluster
+      </button>
+    </div>`;
+  })() : '';
+
+  // ── Online status control ──
+  const monthOnline = c.isOnlineCluster ? null : allClusters.find(x =>
+    x.uid !== c.uid && x.isOnlineCluster && clusterMonthKey(x) === clusterMonthKey(c)
+  );
+  const canRevertOnline = c.isOnlineCluster && c.manualOnline && !isShopifyCluster;
+  const onlineBlock = c.isOnlineCluster
+    ? (canRevertOnline ? `
+      <div style="height:1px;background:var(--border);margin:14px 0"></div>
+      <div class="edit-row" style="margin-bottom:4px">
+        <button class="edt-btn" style="color:#60a0f0;border-color:rgba(100,160,240,.4);background:rgba(100,160,240,.08)" onclick="revertOnline('${c.uid}')">↩ Revert to POS cluster</button>
+        <span style="font-size:.67rem;color:var(--muted)">Remove the online mark and treat this as a normal device cluster again.</span>
+      </div>` : '')
+    : `
+      <div style="height:1px;background:var(--border);margin:14px 0"></div>
+      <div style="font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">Online status:</div>
+      <div class="edit-row" style="margin-bottom:4px">
+        <button class="edt-btn" style="color:#60a0f0;border-color:rgba(100,160,240,.4);background:rgba(100,160,240,.08)" onclick="markOnline('${c.uid}')">🌐 Mark as online</button>
+        <span style="font-size:.67rem;color:var(--muted)">${monthOnline
+          ? `Folds into the existing online cluster <strong style="color:#60a0f0">${monthOnline.clusterID}</strong> for this month.`
+          : `Becomes this month's online cluster (<strong style="color:#60a0f0">PN_${c.startDate.getFullYear()}_${String(c.startDate.getMonth()+1).padStart(2,'0')}_ONL</strong>); later online marks merge in automatically.`}</span>
+      </div>`;
+
+  const editPanel = isEditing ? `
+    <div class="edit-panel" onclick="event.stopPropagation()">
+      <div class="edit-panel-title">${ICON_EDIT} Edit Cluster</div>
+
+      <div class="edit-row">
+        <span class="edit-label">Name</span>
+        <input class="edit-input" id="name-input-${c.uid}" placeholder="e.g. Leipzig Comic Con" value="${c.customName||''}">
+        <input class="edit-input" id="country-input-${c.uid}" placeholder="Country" value="${c.country||''}" style="max-width:150px;flex:none">
+        <button class="edt-btn edt-btn-apply" onclick="applyName('${c.uid}')">Apply</button>
+      </div>
+
+      <div style="height:1px;background:var(--border);margin:4px 0 12px"></div>
+      <div class="edit-panel-title" style="color:#a78bfa">
+        <svg viewBox="0 0 16 16" fill="none" style="width:13px;height:13px"><rect x="2" y="4" width="12" height="8" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/></svg>
+        Cash Sales
+      </div>
+      <div class="edit-row">
+        <span class="edit-label">Amount</span>
+        <input class="edit-input" id="cash-amount-${c.uid}" type="number" min="0" step="0.01" placeholder="0.00" value="${c.cashAmount||''}">
+        <input class="edit-input" id="cash-note-${c.uid}" placeholder="note (optional)" value="${c.cashNote||''}" style="max-width:180px">
+        <button class="edt-btn edt-btn-apply" style="color:#a78bfa;border-color:rgba(167,139,250,.4);background:rgba(167,139,250,.08)" onclick="applyCash('${c.uid}')">Save</button>
+      </div>
+      <div style="font-size:.67rem;color:var(--muted);margin-bottom:12px;margin-left:88px">Cash is added to revenue and included in PDFs — it does not create individual transactions.</div>
+
+      <div class="edit-row">
+        <span class="edit-label">Split date</span>
+        <input class="edit-input" id="date-split-${c.uid}" type="date"
+          min="${c.startDate.toISOString().slice(0,10)}"
+          max="${c.endDate.toISOString().slice(0,10)}">
+        <button class="edt-btn edt-btn-split" onclick="splitAtDate('${c.uid}')">Split at date</button>
+      </div>
+      <div style="font-size:.67rem;color:var(--muted);margin-bottom:14px;margin-left:88px">Transactions before this date stay in this cluster; from this date onward go into a new one.</div>
+
+      <div style="font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">Or select individual transactions to move into a new cluster:</div>
+      <div class="txn-selector" id="split-sel-${c.uid}">${splitRows}</div>
+      ${onlineBlock}
+      <div style="height:1px;background:var(--border);margin:14px 0"></div>
+      <div style="font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">Merge with another cluster:</div>
+      <div class="edit-row" style="margin-bottom:4px">
+        <select class="merge-select" id="merge-sel-${c.uid}">
+          <option value="">— select cluster —</option>
+          ${allClusters.filter(x=>x.uid!=='${c.uid}').map(x=>`<option value="${x.uid}">${x.clusterID}${x.customName?' · '+x.customName:''} (${x.device})</option>`).join('')}
+        </select>
+        <button class="edt-btn edt-btn-merge" onclick="mergeSelected('${c.uid}')">Merge</button>
+      </div>
+      <div class="edit-actions" style="margin-top:14px">
+        <button class="edt-btn edt-btn-split" onclick="splitCluster('${c.uid}')">Split selected into new cluster</button>
+        <button class="edt-btn edt-btn-danger" onclick="deleteCluster('${c.uid}')">Delete cluster</button>
+        <button class="edt-btn edt-btn-cancel" onclick="closeEdit()">Cancel</button>
+      </div>
+    </div>` : '';
+
+  return `
+  <div class="cluster-card ${isEditing?'editing':''}" data-uid="${c.uid}">
+    <div class="cluster-header">
+      <div class="cluster-title">
+        ${typeof readyBadge === 'function' ? readyBadge(c) : ''}
+        <span class="cluster-id">${c.clusterID}</span>
+        <span class="cluster-label">${dateRange}</span>
+        ${c.customName?`<span class="cluster-customname" title="${c.customName}">${c.customName}</span>`:''}
+        <div class="device-badges">${deviceBadges}</div>
+        ${typeof ambiguityBadge === 'function' ? ambiguityBadge(c) : ''}
+      </div>
+      <div class="cluster-meta">
+        <div class="cluster-stat"><div class="cs-label">Revenue${c.cashAmount?' +cash':''}</div><div class="cs-value" style="color:var(--green)">${fmtAmt(c.totalPay+(c.cashAmount||0))}</div></div>
+        <div class="cluster-stat"><div class="cs-label">Fees</div><div class="cs-value" style="color:var(--red)">-${fmtAmt(c.totalFee)}</div></div>
+        <div class="cluster-stat"><div class="cs-label">Net</div><div class="cs-value" style="color:var(--accent)">${fmtAmt(c.totalPay+(c.cashAmount||0)-c.totalFee)}</div></div>
+        <div class="cluster-stat"><div class="cs-label">Txns</div><div class="cs-value">${c.payments.length}</div></div>
+        <span class="chevron">▾</span>
+      </div>
+    </div>
+    <div class="cluster-body">
+      ${manualWarning}
+      ${mergeBanners}
+      ${editPanel}
+      <div class="cluster-sections" style="${c.cashAmount?'grid-template-columns:1fr 1fr 1fr':''}">
+        <div class="section-box">
+          <h4><span class="dot dot-pay"></span>${c.isOnlineCluster?'Online Orders':'Payments'}</h4>
+          <div class="big-num green">${fmtAmt(c.totalPay)}</div>
+          <div class="section-sub">${c.payments.length} order${c.payments.length!==1?'s':''}</div>
+          <div class="divider"></div>
+          <div class="section-sub">Avg: ${c.payments.length?fmtAmt(c.totalPay/c.payments.length):'-'}</div>
+          <div class="section-sub">Highest: ${c.payments.length?fmtAmt(Math.max(...c.payments.map(t=>t.amount))):'-'}</div>
+          ${c.isOnlineCluster?'<div class="section-sub" style="margin-top:6px;color:#60a0f0;font-size:.67rem">Monthly summary — no clustering</div>':''}
+        </div>
+        <div class="section-box">
+          <h4><span class="dot dot-fee"></span>Fees</h4>
+          <div class="big-num red">-${fmtAmt(c.totalFee)}</div>
+          <div class="section-sub">${c.fees.length} fee${c.fees.length!==1?'s':''}</div>
+          <div class="divider"></div>
+          <div class="section-sub">Fee rate: ${feeRate}% of revenue</div>
+          <div class="section-sub">Avg fee: ${c.fees.length?fmtAmt(c.totalFee/c.fees.length):'-'}</div>
+        </div>
+        ${c.cashAmount?`
+        <div class="section-box" style="border-color:rgba(167,139,250,.3)">
+          <h4><span class="dot dot-cash"></span>Cash${c.cashNote?' · <span style="font-weight:400;font-style:italic">'+c.cashNote+'</span>':''}</h4>
+          <div class="big-num purple">${fmtAmt(c.cashAmount)}</div>
+          <div class="section-sub">manual entry</div>
+          <div class="divider"></div>
+          <div class="section-sub">Total revenue incl. cash:</div>
+          <div class="section-sub" style="color:var(--green);font-weight:500">${fmtAmt(c.totalPay+c.cashAmount)}</div>
+        </div>`:''}
+      </div>
+      <div class="net-row">
+        <span class="net-label">Net (Revenue${c.cashAmount?' + Cash':''} − Fees)</span>
+        <span class="net-value" style="color:var(--accent)">${fmtAmt(c.totalPay + (c.cashAmount||0) - c.totalFee)}</span>
+      </div>
+      <div class="action-row">
+        <button class="pdf-btn pdf-btn-pay" onclick="event.stopPropagation();exportPDF('${c.uid}','payments')">${ICON_PDF} ${c.clusterID}_P.pdf</button>
+        <button class="pdf-btn pdf-btn-fee" onclick="event.stopPropagation();exportPDF('${c.uid}','fees')">${ICON_PDF} ${c.clusterID}_F.pdf</button>
+        <button class="pdf-btn edit-btn" onclick="event.stopPropagation();openEdit('${c.uid}')">${ICON_EDIT} ${isEditing?'Close editor':'Edit cluster'}</button>
+      </div>
+      ${accountingControls(c)}
+      <button class="toggle-txn-btn" data-target="${txnId}">Show transactions ▾</button>
+      <div id="${txnId}" style="display:none">
+        <div class="txn-table-wrap">
+          <table class="txn-table">
+            <thead><tr><th>Date/Time</th><th>Type</th><th>Amount</th><th>Card</th><th></th></tr></thead>
+            <tbody>${allRows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+</script>
+<script>
+// ══════════════════════════════════════════════════════════════════
+// ACCOUNTING BRIDGE — ZollTool matching · myPOS verify · Lexware booking
+// Talks to the local Node backend (src/server.js); the browser never sees
+// any secret. Degrades gracefully to the offline PDF tool if unreachable.
+// ══════════════════════════════════════════════════════════════════
+async function loadBridge() {
+  try {
+    const st = await fetch('/api/status').then(r => r.json());
+    window.bridge = st;
+    renderBridgeStatus(st);
+    if (st.zolltool && st.zolltool.configured) {
+      const d = await fetch('/api/zolltool/events').then(r => r.json());
+      window.zollEvents = (d.events || []).filter(e => e.dateStart && e.dateEnd);
+    }
+    if (allClusters.length) render();
+  } catch (e) {
+    /* backend not reachable — the tool still works offline for clustering + PDFs */
+  }
+}
+function renderBridgeStatus(st) {
+  const el = document.getElementById('bridgeStatus');
+  if (!el) return;
+  const dot = ok => `<span class="bstat-dot" style="background:${ok ? 'var(--green)' : 'var(--muted2)'}"></span>`;
+  el.innerHTML =
+    `${dot(st.zolltool.configured)}ZollTool` +
+    `&nbsp;&nbsp;${dot(st.mypos.mode === 'live')}myPOS ${st.mypos.mode}` +
+    `&nbsp;&nbsp;${dot(st.lexware.configured)}Lexware`;
+}
+function isoDay(d) { return new Date(d).toISOString().slice(0, 10); }
+
+// Suggest a ZollTool event for a POS cluster: prefer one that STARTS on the same
+// day as the cluster; otherwise fall back to any event whose range overlaps.
+function suggestEvent(c) {
+  if (!window.zollEvents || c.isOnlineCluster) return null;
+  const s = isoDay(c.startDate), e = isoDay(c.endDate);
+  const sameStart = window.zollEvents.find(ev => ev.dateStart === s);
+  if (sameStart) return sameStart;
+  return window.zollEvents.find(ev => ev.dateStart <= e && ev.dateEnd >= s) || null;
+}
+function matchEvent(uid, eventId) {
+  const c = allClusters.find(x => x.uid === uid); if (!c) return;
+  const ev = (window.zollEvents || []).find(e => e.id === eventId);
+  c.matchedEventId = ev ? eventId : '';
+  c.matchedEvent = ev || null;
+  if (ev) {
+    if (!c.customName) c.customName = ev.name;
+    if (!c.country && ev.venue && ev.venue.country) c.country = ev.venue.country;
+  }
+  render();
+}
+async function verifyCluster(uid) {
+  const c = allClusters.find(x => x.uid === uid); if (!c) return;
+  c.myposVerify = { loading: true }; render();
+  try {
+    const q = new URLSearchParams({ from: isoDay(c.startDate), to: isoDay(c.endDate) });
+    const r = await fetch('/api/mypos/verify?' + q).then(r => r.json());
+    if (r.error) throw new Error(r.error);
+    const diff = Math.round((r.summary.gross - c.totalPay) * 100) / 100;
+    c.myposVerify = { gross: r.summary.gross, fees: r.summary.fees, diff, ok: Math.abs(diff) < 0.01, mode: r.mode };
+  } catch (e) { c.myposVerify = { error: e.message }; }
+  render();
+}
+function accountingControls(c) {
+  if (!window.bridge) return '';
+  const events = window.zollEvents || [];
+  const sug = suggestEvent(c);
+  const options = ['<option value="">— match ZollTool event —</option>']
+    .concat(events.map(e => `<option value="${e.id}" ${c.matchedEventId === e.id ? 'selected' : ''}>${e.name} (${e.dateStart})</option>`)).join('');
+  const matchUI = c.isOnlineCluster
+    ? '<span class="acct-note">Online — books as monthly online sales</span>'
+    : `<select class="merge-select" onchange="matchEvent('${c.uid}',this.value)" onclick="event.stopPropagation()">${options}</select>
+       ${sug && !c.matchedEventId ? `<button class="edt-btn edt-btn-merge" onclick="event.stopPropagation();matchEvent('${c.uid}','${sug.id}')">Match “${sug.name}”?</button>` : ''}`;
+  const v = c.myposVerify;
+  const verifyBadge = !v ? '' : v.loading ? '<span class="acct-badge">checking…</span>'
+    : v.error ? `<span class="acct-badge bad">verify failed</span>`
+    : v.ok ? `<span class="acct-badge good">✓ myPOS matches (${v.mode})</span>`
+    : `<span class="acct-badge warn">Δ ${fmtAmt(v.diff)} vs myPOS (${v.mode})</span>`;
+  const canBook = window.bridge.lexware && window.bridge.lexware.configured;
+  // Matching is optional — a cluster books with its own name + dates (+ country).
+  return `<div class="acct-row" onclick="event.stopPropagation()">
+    <div class="acct-line">${matchUI}</div>
+    <div class="acct-line">
+      <button class="edt-btn" onclick="verifyCluster('${c.uid}')">Verify vs myPOS</button>
+      ${verifyBadge}
+      ${canBook ? (c.bookedVoucherId
+        ? `<a class="acct-badge good" href="https://app.lexware.de/permalink/vouchers/view/${c.bookedVoucherId}" target="_blank" style="text-decoration:none">Booked ✓ — view</a>`
+        : `<button class="edt-btn edt-btn-book" onclick="bookCluster('${c.uid}')">⇪ Book revenue to Lexware</button>`) : ''}
+    </div>
+  </div>`;
+}
+async function postBook(payload) {
+  const r = await fetch('/api/lexware/book', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+  return d;
+}
+// Build the revenue voucher payload (+ PDF) for a cluster from its own data.
+// A matched event just pre-fills name/country/dates. Returns null if a POS
+// cluster still has no name.
+function buildRevenuePayload(c) {
+  const total = c.totalPay + (c.cashAmount || 0);
+  let payload;
+  if (c.isOnlineCluster) {
+    payload = { kind: 'revenue', voucherNumber: `${c.clusterID}_P`, customer: 'contact', customerName: 'Revenue - Online Sales',
+      voucherDate: isoDay(c.startDate), dueDate: isoDay(c.endDate), totalGrossAmount: total, taxType: 'gross', category: 'einnahmen',
+      remark: `Online Sales - ${c.clusterID}` };
+  } else {
+    const ev = c.matchedEvent;
+    const name = (c.customName && c.customName.trim()) || (ev && ev.name) || '';
+    if (!name) return null;
+    const country = c.country || (ev && ev.venue && ev.venue.country) || undefined;
+    const startDate = ev ? ev.dateStart : isoDay(c.startDate);
+    const endDate = ev ? ev.dateEnd : isoDay(c.endDate);
+    payload = { kind: 'revenue', voucherNumber: `${c.clusterID}_P`, customer: 'contact',
+      event: { name, country, startDate, endDate, vatRate: 0 },
+      totalGrossAmount: total, taxType: 'gross', category: 'einnahmen',
+      remark: ['Point of Sales', name, country].filter(Boolean).join(' - ') };
+  }
+  payload.pdfBase64 = exportPDF(c.uid, 'payments', { returnBase64: true });
+  payload.filename = `${c.clusterID}_P.pdf`;
+  return payload;
+}
+async function bookCluster(uid) {
+  const c = allClusters.find(x => x.uid === uid); if (!c) return;
+  // POS cluster with no name and no match → ask for one.
+  if (!c.isOnlineCluster && !(c.customName && c.customName.trim()) && !c.matchedEvent) {
+    const range = fmtDate(c.startDate) + (fmtDate(c.startDate) !== fmtDate(c.endDate) ? ' – ' + fmtDate(c.endDate) : '');
+    const nm = (prompt('Name for this booking (event / convention):', range) || '').trim();
+    if (!nm) return;
+    c.customName = nm;
+  }
+  const payload = buildRevenuePayload(c);
+  if (!payload) { alert('Give this cluster a name first (Edit → Name).'); return; }
+  try {
+    await postBook({ ...payload, dryRun: true });
+    if (!confirm(`Book ${fmtAmt(payload.totalGrossAmount)} as ${payload.voucherNumber} into Lexware?`)) return;
+    const res = await postBook({ ...payload, dryRun: false });
+    c.bookedVoucherId = res.voucherId; render();
+    alert('Booked ✓\n' + res.permalink);
+  } catch (e) { alert('Lexware: ' + e.message); }
+}
+// Book every ready, not-yet-booked cluster in one go (one confirm, N vouchers).
+async function bookAllReady() {
+  const ready = allClusters.filter(c => !c.bookedVoucherId && clusterReady(c));
+  if (!ready.length) { alert('No ready, unbooked clusters to book.'); return; }
+  const total = ready.reduce((s, c) => s + c.totalPay + (c.cashAmount || 0), 0);
+  if (!confirm(`Book ${ready.length} ready cluster(s) totalling ${fmtAmt(total)} to Lexware?\nThis creates ${ready.length} separate voucher(s).`)) return;
+  let ok = 0; const fails = [];
+  for (const c of ready) {
+    const payload = buildRevenuePayload(c);
+    if (!payload) { fails.push(`${c.clusterID}: needs a name`); continue; }
+    try { const res = await postBook({ ...payload, dryRun: false }); c.bookedVoucherId = res.voucherId; ok++; }
+    catch (e) { fails.push(`${c.clusterID}: ${e.message}`); }
+  }
+  render();
+  alert(`Booked ${ok}/${ready.length} ✓` + (fails.length ? `\n\nSkipped/failed:\n${fails.join('\n')}` : ''));
+}
+async function bookMonthFees(key) {
+  const clusters = allClusters.filter(c => getMonthKey(c.startDate) === key);
+  const totalFee = Math.round(clusters.reduce((s, c) => s + c.totalFee, 0) * 100) / 100;
+  if (totalFee <= 0) { alert('No fees in this month.'); return; }
+  const pdfBase64 = exportMonthPDF(key, 'fees', { returnBase64: true });
+  const [yr, mo] = key.split('_');
+  const payload = { kind: 'fees', voucherNumber: `PN_${key}_F`, voucherDate: `${yr}-${mo}-28`,
+    totalGrossAmount: totalFee, taxType: 'gross', taxRatePercent: 0,
+    remark: `myPOS fees ${getMonthLabel(key)}`, pdfBase64, filename: `PN_${key}_F.pdf` };
+  try {
+    await postBook({ ...payload, dryRun: true });
+    if (!confirm(`Book monthly myPOS fees ${fmtAmt(totalFee)} as PN_${key}_F?`)) return;
+    const res = await postBook({ ...payload, dryRun: false });
+    alert('Fees booked ✓\n' + res.permalink);
+  } catch (e) { alert('Lexware fees: ' + e.message + (/category/i.test(e.message) ? '\n\nSet LEXWARE_FEE_CATEGORY in the tool .env.' : '')); }
+}
+// ── Event-duration timeline: colored vertical lines in a left gutter, one per
+// ZollTool event, spanning the cluster cards that fall within its dates. ──────
+function eventColor(id) {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return `hsl(${h % 360} 70% 60%)`;
+}
+function injectEventTimeline() {
+  const grid = document.getElementById('clustersGrid');
+  if (!grid) return;
+  grid.querySelectorAll('.evt-timeline, .evt-timeline-label').forEach(el => el.remove());
+  const events = window.zollEvents || [];
+  if (!events.length) { grid.style.paddingLeft = ''; return; }
+  grid.style.position = 'relative';
+  const gridRect = grid.getBoundingClientRect();
+  const cardByUid = new Map([...grid.querySelectorAll('.cluster-card')].map(el => [el.dataset.uid, el]));
+
+  // One vertical span per event that contains rendered (non-online) clusters.
+  const spans = [];
+  for (const ev of events) {
+    const els = allClusters
+      .filter(c => !c.isOnlineCluster && isoDay(c.startDate) <= ev.dateEnd && isoDay(c.endDate) >= ev.dateStart)
+      .map(c => cardByUid.get(c.uid))
+      .filter(Boolean);
+    if (!els.length) continue;
+    let top = Infinity, bottom = -Infinity;
+    for (const el of els) {
+      const r = el.getBoundingClientRect();
+      top = Math.min(top, r.top - gridRect.top);
+      bottom = Math.max(bottom, r.bottom - gridRect.top);
+    }
+    spans.push({ ev, top, bottom });
+  }
+  if (!spans.length) { grid.style.paddingLeft = ''; return; }
+
+  // Greedy lane packing so events overlapping in time sit in separate columns.
+  spans.sort((a, b) => a.top - b.top);
+  const laneBottoms = [];
+  for (const sp of spans) {
+    let lane = laneBottoms.findIndex(b => b <= sp.top + 0.5);
+    if (lane < 0) { lane = laneBottoms.length; laneBottoms.push(0); }
+    laneBottoms[lane] = sp.bottom;
+    sp.lane = lane;
+  }
+  const laneW = 16;
+  const pl = laneW * laneBottoms.length + 8 + 'px';
+  if (grid.style.paddingLeft !== pl) grid.style.paddingLeft = pl;
+
+  for (const sp of spans) {
+    const x = 6 + sp.lane * laneW;
+    const color = eventColor(sp.ev.id);
+    const tip = `${sp.ev.name}  (${sp.ev.dateStart} – ${sp.ev.dateEnd})`;
+    const line = document.createElement('div');
+    line.className = 'evt-timeline';
+    line.title = tip;
+    line.style.cssText = `position:absolute;left:${x}px;top:${sp.top}px;height:${Math.max(6, sp.bottom - sp.top)}px;width:4px;border-radius:3px;background:${color};box-shadow:0 0 0 1px rgba(2,6,23,.6)`;
+    grid.appendChild(line);
+    const label = document.createElement('div');
+    label.className = 'evt-timeline-label';
+    label.textContent = sp.ev.name;
+    label.title = tip;
+    label.style.cssText = `position:absolute;left:${x + 5}px;top:${sp.top + 4}px;writing-mode:vertical-rl;max-height:${Math.max(10, sp.bottom - sp.top - 8)}px;overflow:hidden;font-size:.6rem;letter-spacing:.04em;color:${color};opacity:.92;pointer-events:none`;
+    grid.appendChild(label);
+  }
+}
+// Redraw the timeline only after layout has settled (next animation frame), and
+// on ANY change that moves cards: a render, a window resize, or a card growing/
+// shrinking (expand, collapse, auto-close after merge/match). A ResizeObserver on
+// the grid catches height changes that don't go through render(); coalescing via
+// rAF also prevents the paddingLeft write below from re-triggering the observer.
+let _tlScheduled = false;
+function scheduleTimeline() {
+  if (_tlScheduled) return;
+  _tlScheduled = true;
+  requestAnimationFrame(() => { _tlScheduled = false; try { injectEventTimeline(); } catch (e) {} });
+}
+if (typeof render === 'function') {
+  const _origRender = render;
+  render = function () { _origRender.apply(this, arguments); scheduleTimeline(); };
+}
+window.addEventListener('resize', scheduleTimeline);
+(function observeGrid() {
+  const grid = document.getElementById('clustersGrid');
+  if (!grid || grid._tlObserved || typeof ResizeObserver === 'undefined') return;
+  grid._tlObserved = true;
+  new ResizeObserver(scheduleTimeline).observe(grid);
+})();
+
+// A cluster is bookable once it's online, matched, or has a name (dates always exist).
+function clusterReady(c) {
+  return !!(c.isOnlineCluster || c.matchedEventId || (c.customName && c.customName.trim()));
+}
+// Header indicator: ⇪ booked, ✓ ready, nothing otherwise.
+function readyBadge(c) {
+  if (c.bookedVoucherId) return `<span class="ready-badge booked" title="Booked to Lexware">⇪</span>`;
+  if (!clusterReady(c)) return '';
+  const why = c.isOnlineCluster ? 'Online sales — ready to book'
+    : c.matchedEventId ? 'Matched to a ZollTool event — ready to book'
+    : 'Name entered — ready to book';
+  return `<span class="ready-badge" title="${why}">✓</span>`;
+}
+
+// ZollTool events whose dates overlap this (POS) cluster.
+function overlappingEvents(c) {
+  if (c.isOnlineCluster || !window.zollEvents) return [];
+  const s = isoDay(c.startDate), e = isoDay(c.endDate);
+  return window.zollEvents.filter(ev => ev.dateStart <= e && ev.dateEnd >= s);
+}
+// Flag an unmatched cluster that overlaps 2+ events (auto-match can't decide).
+function ambiguityBadge(c) {
+  if (c.isOnlineCluster || c.matchedEventId) return '';
+  const evs = overlappingEvents(c);
+  if (evs.length < 2) return '';
+  const names = evs.map(ev => ev.name).join(', ');
+  return `<span class="ambig-badge" title="Overlaps ${evs.length} events (${names}) — match manually">⚠ ${evs.length} events</span>`;
+}
+
+// ── Auto merge + match, driven by ZollTool events. ───────────────────────────
+// Each POS cluster is assigned to the single event whose dates overlap it; if
+// TWO or more events overlap (two events at the same time) it's left for manual
+// matching. Clusters that resolve to the same event are merged into one booking.
+function mergeGroup(clusters, ev) {
+  const devices = [...new Set(clusters.flatMap(c => c.devices || [c.device]))];
+  const m = makeCluster(devices.join(' + '), clusters.flatMap(c => c.txns));
+  m.devices = devices;
+  m.cashAmount = clusters.reduce((s, c) => s + (c.cashAmount || 0), 0);
+  m.cashNote = clusters.map(c => c.cashNote).filter(Boolean).join(', ');
+  m.matchedEventId = ev.id;
+  m.matchedEvent = ev;
+  m.customName = ev.name;
+  m.country = (ev.venue && ev.venue.country) || '';
+  return m;
+}
+function autoMergeAndMatch() {
+  const events = window.zollEvents || [];
+  if (!events.length) { alert('No ZollTool events loaded — check the ZollTool connection.'); return; }
+  const pos = allClusters.filter(c => !c.isOnlineCluster);
+
+  // Resolve each cluster to at most one event (respecting existing manual matches).
+  const mapping = new Map();
+  let ambiguous = 0;
+  for (const c of pos) {
+    if (c.matchedEventId) {
+      const ev = events.find(e => e.id === c.matchedEventId);
+      if (ev) mapping.set(c.uid, ev);
+      continue;
+    }
+    const s = isoDay(c.startDate), e = isoDay(c.endDate);
+    const cands = events.filter(ev => ev.dateStart <= e && ev.dateEnd >= s);
+    if (cands.length === 1) mapping.set(c.uid, cands[0]);
+    else if (cands.length > 1) ambiguous++; // two events at once → don't auto-match
+  }
+
+  // Group resolved clusters by event; merge groups of 2+.
+  const groups = new Map();
+  for (const c of pos) {
+    const ev = mapping.get(c.uid);
+    if (!ev) continue;
+    if (!groups.has(ev.id)) groups.set(ev.id, { ev, clusters: [] });
+    groups.get(ev.id).clusters.push(c);
+  }
+
+  let matched = 0, mergedGroups = 0;
+  const consumed = new Set();
+  const created = [];
+  for (const { ev, clusters } of groups.values()) {
+    matched += clusters.length;
+    if (clusters.length > 1) {
+      clusters.forEach(c => consumed.add(c.uid));
+      created.push(mergeGroup(clusters, ev));
+      mergedGroups++;
+    } else {
+      const c = clusters[0];
+      c.matchedEventId = ev.id;
+      c.matchedEvent = ev;
+      if (!c.customName) c.customName = ev.name;
+      if (!c.country && ev.venue && ev.venue.country) c.country = ev.venue.country;
+    }
+  }
+
+  allClusters = allClusters.filter(c => !consumed.has(c.uid)).concat(created);
+  allClusters.sort((a, b) => b.startDate - a.startDate);
+  assignClusterIDs(allClusters);
+  editingUID = null;
+  render();
+  alert(
+    'Auto merge & match:\n' +
+    `• ${matched} cluster(s) matched to events\n` +
+    `• ${mergedGroups} merged across terminals\n` +
+    `• ${ambiguous} left for manual review (overlapping events)`
+  );
+}
+
+document.addEventListener('DOMContentLoaded', loadBridge);
+</script>
+</body>
+</html>
