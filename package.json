@@ -9,7 +9,8 @@
   "scripts": {
     "web": "node src/server.js",
     "start": "node src/index.js",
-    "example": "node src/index.js payload.json --dry-run"
+    "example": "node src/index.js payload.json --dry-run",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18"

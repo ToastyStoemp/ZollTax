@@ -5,3 +5,6 @@ node_modules/
 data/*.pdf
 !data/example.pdf
 cache/
+# Multi-tenant store: accounts + encrypted per-client secrets
+data/users.json
+data/clients/

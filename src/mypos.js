@@ -86,9 +86,15 @@ export class MyposClient {
     return txns;
   }
 
+  // Namespaces cache keys per tenant so different clients never share cached
+  // device names or transactions (set by the per-tenant client factory).
+  #ck(name) {
+    return (this.config.cacheNs ? `${this.config.cacheNs}__` : '') + name;
+  }
+
   // Persistent serial_number → friendly-name cache (loaded once from disk).
   #deviceCache() {
-    if (!this.#deviceCacheObj) this.#deviceCacheObj = cacheGet('mypos-devices.json') || {};
+    if (!this.#deviceCacheObj) this.#deviceCacheObj = cacheGet(this.#ck('mypos-devices.json')) || {};
     return this.#deviceCacheObj;
   }
 
@@ -115,7 +121,7 @@ export class MyposClient {
       }
       for (const t of group) t.terminal = cache[serial];
     }
-    if (changed) cacheSet('mypos-devices.json', cache);
+    if (changed) cacheSet(this.#ck('mypos-devices.json'), cache);
   }
 
   async #lookupTerminalName(tid) {
@@ -198,7 +204,7 @@ export class MyposClient {
   }
 
   async #fetchAccountRows(accountNumber, from, to, stable) {
-    const key = `mypos-tx__${accountNumber}__${from}__${to}.json`;
+    const key = this.#ck(`mypos-tx__${accountNumber}__${from}__${to}.json`);
     const cached = cacheGet(key);
     // Reuse a cached pull for a stable (past) window, or a recent one <10 min old.
     if (cached && (stable || Date.now() - cached.fetchedAt < 10 * 60 * 1000)) return cached.rows;
