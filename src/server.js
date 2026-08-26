@@ -9,7 +9,7 @@ import { buildRevenueVoucher } from './voucher.js';
 import { buildFeeVoucher } from './expense.js';
 import { summarize } from './mypos.js';
 import { CONFIG_GROUPS, redactConfig } from './config-schema.js';
-import { masterKeyConfigured, generateMasterKeyHex, resetMasterKeyCache, signSession, verifySession } from './crypto.js';
+import { masterKeyConfigured, generateMasterKeyHex, resetMasterKeyCache, encryptJson, decryptJson } from './crypto.js';
 import {
   authenticate,
   bootstrapAdmin,
@@ -17,6 +17,9 @@ import {
   createUser,
   deleteUser,
   getUser,
+  getUserRecord,
+  patchUser,
+  has2fa,
   getTenantConfig,
   listUsers,
   saveTenantConfig,
@@ -24,6 +27,10 @@ import {
 } from './store.js';
 import { getTenantClients, invalidateTenant } from './tenant.js';
 import { rateLimit } from './rate-limit.js';
+import { createSession, getSession, touchSession, revokeSession, revokeAllForUser, listForUser, listAll } from './sessions.js';
+import { parseDevice, lookupGeo, geoEnabled } from './geo.js';
+import { generateSecret, otpauthUri, verifyToken, generateRecoveryCodes, hashRecovery } from './totp.js';
+import { issueChallenge, verifyChallenge, SOLVER_JS } from './captcha.js';
 
 /**
  * ZollTax backend: serves the cluster UI (public/) and a JSON API. Multi-tenant
@@ -124,17 +131,27 @@ function parseCookies(req) {
   }
   return out;
 }
-function sessionUser(req) {
-  const id = verifySession(parseCookies(req)[COOKIE]);
-  return id ? getUser(id) : null;
+/** The live server-side session for this request's cookie, or null. */
+function currentSession(req) {
+  const id = parseCookies(req)[COOKIE];
+  return id ? getSession(id) : null;
 }
-function setSessionCookie(res, userId) {
-  const attrs = [`${COOKIE}=${signSession(userId)}`, 'Path=/', 'HttpOnly', 'SameSite=Lax', `Max-Age=${30 * 24 * 60 * 60}`];
+function setSessionCookie(res, sessionId) {
+  const attrs = [`${COOKIE}=${sessionId}`, 'Path=/', 'HttpOnly', 'SameSite=Lax', `Max-Age=${30 * 24 * 60 * 60}`];
   if (SECURE_COOKIE) attrs.push('Secure');
   res.setHeader('Set-Cookie', attrs.join('; '));
 }
 function clearSessionCookie(res) {
   res.setHeader('Set-Cookie', `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+}
+
+/** Create a session for a just-authenticated user, enriched with device + geo. */
+async function startSession(req, res, userId) {
+  const ip = clientIp(req);
+  const ua = req.headers['user-agent'] || '';
+  const geo = await lookupGeo(ip);
+  const id = createSession({ userId, ip, ua, device: parseDevice(ua), geo });
+  setSessionCookie(res, id);
 }
 
 // ── Authenticated API routes: (ctx) → JSON. ctx = { url, body, user, clients } ─
@@ -229,6 +246,40 @@ const routes = {
 
   'POST /api/lexware/book': async ({ body, clients }) => bookVoucher(body, clients.lexware),
 
+  // ── Two-factor auth (TOTP authenticator) ───────────────────────────────────
+  'GET /api/2fa/status': async ({ user }) => ({ enabled: has2fa(user.id) }),
+  'POST /api/2fa/setup': async ({ user }) => {
+    // Generate a secret and stash it (encrypted, not yet enabled). Shown once for
+    // manual entry / as an otpauth:// link to add to an authenticator app.
+    const secret = generateSecret();
+    patchUser(user.id, { totpEnc: encryptJson(secret), totpEnabled: false });
+    return { secret, otpauth: otpauthUri({ secret, account: user.email, issuer: 'ZollTax' }) };
+  },
+  'POST /api/2fa/enable': async ({ user, body }) => {
+    const rec = getUserRecord(user.id);
+    if (!rec?.totpEnc) throw new HttpError(400, 'Start 2FA setup first.');
+    if (!verifyToken(decryptJson(rec.totpEnc), body.code)) {
+      throw new HttpError(400, 'That code is not valid — check your device clock and try again.');
+    }
+    const codes = generateRecoveryCodes(10);
+    patchUser(user.id, { totpEnabled: true, recovery: codes.map(hashRecovery) });
+    return { enabled: true, recovery: codes }; // recovery codes shown exactly once
+  },
+  'POST /api/2fa/disable': async ({ user, body }) => {
+    const rec = getUserRecord(user.id);
+    if (!rec?.totpEnabled) return { enabled: false };
+    const ok = verifyToken(decryptJson(rec.totpEnc), body.code) || (rec.recovery || []).includes(hashRecovery(body.code || ''));
+    if (!ok) throw new HttpError(400, 'Enter a valid authenticator or recovery code to disable 2FA.');
+    patchUser(user.id, { totpEnc: null, totpEnabled: false, recovery: [] });
+    return { enabled: false };
+  },
+
+  // ── Sessions (this account) ────────────────────────────────────────────────
+  'GET /api/sessions': async ({ user, sessionId }) => ({
+    geo: geoEnabled(),
+    sessions: listForUser(user.id).map((s) => ({ ...s, current: s.id === sessionId })),
+  }),
+
   // ── Admin: user (client) management ────────────────────────────────────────
   'GET /api/admin/users': async ({ user }) => {
     requireAdmin(user);
@@ -237,6 +288,19 @@ const routes = {
   'POST /api/admin/users': async ({ user, body }) => {
     requireAdmin(user);
     return { user: createUser({ email: body.email, password: body.password, name: body.name, role: body.role }) };
+  },
+  'GET /api/admin/sessions': async ({ user, sessionId }) => {
+    requireAdmin(user);
+    const byId = Object.fromEntries(listUsers().map((u) => [u.id, u]));
+    return {
+      geo: geoEnabled(),
+      sessions: listAll().map((s) => ({
+        ...s,
+        current: s.id === sessionId,
+        email: byId[s.userId]?.email || s.userId,
+        role: byId[s.userId]?.role || '',
+      })),
+    };
   },
 };
 
@@ -261,6 +325,24 @@ async function adminUserSubroute(method, path, ctx) {
     return { ok: true };
   }
   throw new HttpError(404, 'Not found');
+}
+
+// Revoke a session by id — your own (/api/sessions/:id) or any (admin).
+async function sessionSubroute(method, path, ctx) {
+  if (method !== 'DELETE') return undefined;
+  let m = /^\/api\/sessions\/([^/]+)$/.exec(path);
+  if (m) {
+    if (!listForUser(ctx.user.id).some((s) => s.id === m[1])) throw new HttpError(404, 'Session not found');
+    revokeSession(m[1]);
+    return { ok: true };
+  }
+  m = /^\/api\/admin\/sessions\/([^/]+)$/.exec(path);
+  if (m) {
+    requireAdmin(ctx.user);
+    revokeSession(m[1]);
+    return { ok: true };
+  }
+  return undefined;
 }
 
 // ── Lexware booking (per-tenant credentials) ─────────────────────────────────
@@ -344,6 +426,13 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // Proof-of-work CAPTCHA (public): a challenge + the inline browser solver.
+    if (method === 'GET' && path === '/api/captcha/challenge') return send(res, 200, issueChallenge());
+    if (method === 'GET' && path === '/api/captcha/solver.js') {
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'public, max-age=3600' });
+      return res.end(SOLVER_JS);
+    }
+
     const body = method === 'POST' || method === 'PUT' ? await readBody(req) : undefined;
 
     // First-run setup (only usable while no account exists).
@@ -352,6 +441,9 @@ const server = createServer(async (req, res) => {
     }
     if (method === 'POST' && path === '/api/setup') {
       if (countUsers() > 0) return send(res, 409, { error: 'ZollTax is already set up.' });
+      // Account creation is bot-gated by the proof-of-work CAPTCHA.
+      const cap = verifyChallenge(body.captchaToken, body.captchaSolution);
+      if (!cap.ok) return send(res, 400, { error: cap.error });
       // Generate + persist an encryption key on first run if none was provided.
       if (!masterKeyConfigured()) {
         try {
@@ -369,7 +461,7 @@ const server = createServer(async (req, res) => {
       } catch (e) {
         return send(res, 400, { error: e.message });
       }
-      setSessionCookie(res, user.id);
+      await startSession(req, res, user.id);
       return send(res, 200, { user });
     }
 
@@ -377,25 +469,49 @@ const server = createServer(async (req, res) => {
     if (method === 'POST' && path === '/api/auth/login') {
       const user = authenticate(body.email, body.password);
       if (!user) return send(res, 401, { error: 'Invalid email or password.' });
-      setSessionCookie(res, user.id);
+      // Second factor, if this account has it enabled.
+      if (has2fa(user.id)) {
+        const rec = getUserRecord(user.id);
+        const code = String(body.code || '').trim();
+        if (!code) return send(res, 401, { error: 'Authenticator code required.', needs2fa: true });
+        if (verifyToken(decryptJson(rec.totpEnc), code)) {
+          /* valid TOTP */
+        } else {
+          const idx = (rec.recovery || []).indexOf(hashRecovery(code));
+          if (idx < 0) return send(res, 401, { error: 'Invalid authenticator code.', needs2fa: true });
+          const remaining = rec.recovery.slice();
+          remaining.splice(idx, 1); // recovery codes are single-use
+          patchUser(user.id, { recovery: remaining });
+        }
+      }
+      await startSession(req, res, user.id);
       return send(res, 200, { user });
     }
     if (method === 'POST' && path === '/api/auth/logout') {
+      const sess = currentSession(req);
+      if (sess) revokeSession(sess.id);
       clearSessionCookie(res);
       return send(res, 200, { ok: true });
     }
     if (method === 'GET' && path === '/api/auth/me') {
-      const user = sessionUser(req);
+      const sess = currentSession(req);
+      const user = sess ? getUser(sess.userId) : null;
       if (!user) return send(res, 401, { error: 'Not authenticated' });
-      return send(res, 200, { user });
+      return send(res, 200, { user, twoFactor: has2fa(user.id) });
     }
 
-    // Everything else requires a valid session.
-    const user = sessionUser(req);
-    if (!user) return send(res, 401, { error: 'Not authenticated' });
-    const ctx = { url, body, user, clients: getTenantClients(user.id) };
+    // Everything else requires a valid server-side session.
+    const sess = currentSession(req);
+    if (!sess) return send(res, 401, { error: 'Not authenticated' });
+    const user = getUser(sess.userId);
+    if (!user) {
+      revokeSession(sess.id);
+      return send(res, 401, { error: 'Not authenticated' });
+    }
+    touchSession(sess.id);
+    const ctx = { url, body, user, sessionId: sess.id, clients: getTenantClients(user.id) };
 
-    const sub = await adminUserSubroute(method, path, ctx);
+    const sub = (await adminUserSubroute(method, path, ctx)) ?? (await sessionSubroute(method, path, ctx));
     if (sub !== undefined) return send(res, 200, sub);
 
     const handler = routes[`${method} ${path}`];

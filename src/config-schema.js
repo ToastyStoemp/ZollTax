@@ -9,11 +9,17 @@ export const CONFIG_GROUPS = [
   {
     id: 'lexware',
     label: 'Lexware Office',
-    hint: 'Books revenue + fee vouchers. API key from Lexware Office → Settings → Public API.',
+    hint: 'Books revenue + fee vouchers. Titles & descriptions accept placeholders — e.g. [sales_platform], [event_name], [event_country], [month], [year], [vat_rate], [cluster_id], [total]. Blank = built-in default.',
     fields: [
       { key: 'LEXWARE_API_KEY', label: 'API key', secret: true },
       { key: 'LEXWARE_API_URL', label: 'API URL', placeholder: 'https://api.lexoffice.io/v1' },
-      { key: 'LEXWARE_FEE_CATEGORY', label: 'Fee category UUID', hint: 'Expense account for the monthly myPOS fees voucher.' },
+      { key: 'LEXWARE_FEE_CATEGORY', label: 'Fee category UUID', hint: 'Expense account for the monthly fees voucher.' },
+      { key: 'LEXWARE_DOMESTIC_VAT', label: 'Domestic VAT % (Germany)', placeholder: '19', hint: 'Applied when the event country is Germany; foreign events book at 0%.' },
+      { key: 'LEXWARE_EVENT_TITLE_TEMPLATE', label: 'Event revenue — voucher title', template: true, placeholder: 'Revenue - [event_name]' },
+      { key: 'LEXWARE_EVENT_DESC_TEMPLATE', label: 'Event revenue — description', template: true, placeholder: 'Point of Sales - [event_name] - [event_country]' },
+      { key: 'LEXWARE_ONLINE_TITLE_TEMPLATE', label: 'Online sales — voucher title', template: true, placeholder: 'Revenue - Online Sales' },
+      { key: 'LEXWARE_ONLINE_DESC_TEMPLATE', label: 'Online sales — description', template: true, placeholder: '[sales_platform] - [month]' },
+      { key: 'LEXWARE_FEE_DESC_TEMPLATE', label: 'Fees — description', template: true, placeholder: '[sales_platform] fees [month]' },
     ],
   },
   {

@@ -259,6 +259,9 @@ h1 span{color:var(--accent)}
 .field input,.field select{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:var(--font);font-size:.85rem;padding:9px 11px}
 .field input:focus,.field select:focus{outline:none;border-color:var(--accent)}
 .field .hint{font-size:.66rem;color:var(--muted2);margin-top:4px}
+.field .tpl-preview{color:var(--accent2);font-style:italic}
+.badge-on{display:inline-block;font-size:.7rem;font-weight:700;color:var(--green);background:rgba(52,211,153,.14);border-radius:6px;padding:2px 9px}
+.empty{color:var(--muted);font-size:.85rem;padding:6px 0}
 .field .saved-tag{font-size:.62rem;color:var(--green);text-transform:uppercase;letter-spacing:.06em;margin-left:8px}
 .field .clear-link{font-size:.62rem;color:var(--red);cursor:pointer;margin-left:8px;text-transform:uppercase;letter-spacing:.06em}
 .cfg-group{border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px}
@@ -291,6 +294,7 @@ h1 span{color:var(--accent)}
     <div id="headerUser" class="header-user" style="display:none">
       <span id="headerUserEmail"></span>
       <button id="headerUsersBtn" class="icon-btn" style="display:none" onclick="openAdminUsers()">Users</button>
+      <button class="icon-btn" onclick="openSecurity()">🔒 Security</button>
       <button class="icon-btn" onclick="openConfig()">⚙ Settings</button>
       <button class="icon-btn" onclick="doLogout()">Log out</button>
     </div>
@@ -361,7 +365,7 @@ h1 span{color:var(--accent)}
       <div class="field"><label>Name (optional)</label><input id="setupName" type="text"></div>
       <div class="field"><label>Password</label><input id="setupPassword" type="password" autocomplete="new-password" placeholder="at least 8 characters" required></div>
       <div class="field"><label>Confirm password</label><input id="setupPassword2" type="password" autocomplete="new-password" required></div>
-      <button class="btn-primary" type="submit" style="width:100%">Create admin & continue</button>
+      <button id="setupBtn" class="btn-primary" type="submit" style="width:100%">Create admin & continue</button>
       <div id="setupMsg" class="form-msg bad"></div>
     </form>
   </div>
@@ -375,6 +379,10 @@ h1 span{color:var(--accent)}
     <form id="loginForm" onsubmit="return submitLogin(event)">
       <div class="field"><label>Email</label><input id="loginEmail" type="email" autocomplete="username" required></div>
       <div class="field"><label>Password</label><input id="loginPassword" type="password" autocomplete="current-password" required></div>
+      <div class="field" id="loginCodeField" style="display:none">
+        <label>Authenticator code</label>
+        <input id="loginCode" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="6-digit code or recovery code">
+      </div>
       <button class="btn-primary" type="submit" style="width:100%">Log in</button>
       <div id="loginMsg" class="form-msg bad"></div>
     </form>
@@ -416,9 +424,43 @@ h1 span{color:var(--accent)}
       <button class="btn-primary" onclick="createUserAccount()">Create account</button>
       <div id="usersMsg" class="form-msg" style="margin-top:10px"></div>
     </div>
+    <div style="margin-top:20px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <h3 style="font-size:.9rem;font-weight:700">Active login sessions</h3>
+        <button class="icon-btn" style="font-size:.66rem;padding:4px 9px" onclick="refreshAdminSessions()">Refresh</button>
+      </div>
+      <p class="modal-sub" id="adminSessGeoNote" style="margin-bottom:8px"></p>
+      <div id="adminSessions"></div>
+    </div>
   </div>
 </div>
 
+<!-- ── Security (2FA + your sessions) ── -->
+<div id="securityOverlay" class="overlay" style="display:none">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2>Security</h2>
+      <button class="modal-close" onclick="closeSecurity()">×</button>
+    </div>
+
+    <div class="cfg-group">
+      <h3>Two-factor authentication</h3>
+      <div class="ghint">Protect your login with an authenticator app (Google Authenticator, Authy, 1Password…).</div>
+      <div id="twofaBody"><p style="color:var(--muted);font-size:.8rem">Loading…</p></div>
+    </div>
+
+    <div class="cfg-group">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <h3 style="font-size:.9rem;font-weight:700">Your sessions</h3>
+        <button class="icon-btn" style="font-size:.66rem;padding:4px 9px" onclick="refreshMySessions()">Refresh</button>
+      </div>
+      <p class="modal-sub" id="mySessGeoNote" style="margin-bottom:8px"></p>
+      <div id="mySessions"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/api/captcha/solver.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
@@ -1761,6 +1803,9 @@ async function loadBridge() {
     window.bridge = st;
     renderBridgeStatus(st);
     buildImportPanel(st);
+    // Load this client's config values (incl. Lexware title/description
+    // templates) so bookings can render them without opening Settings.
+    try { window.cfgValues = (await fetch('/api/config').then(r => r.json())).values || {}; } catch { window.cfgValues = window.cfgValues || {}; }
     if (st.zolltool && st.zolltool.configured) {
       const d = await fetch('/api/zolltool/events').then(r => r.json());
       window.zollEvents = (d.events || []).filter(e => e.dateStart && e.dateEnd);
@@ -1769,6 +1814,62 @@ async function loadBridge() {
   } catch (e) {
     /* backend not reachable — the tool still works offline for clustering + PDFs */
   }
+}
+
+// ── Lexware title/description templates ──────────────────────────────────────
+// Substitute [placeholder] tokens, then tidy separators left by empty tokens.
+function renderTemplate(str, vars) {
+  if (!str) return '';
+  let out = String(str).replace(/\[(\w+)\]/g, (_, k) => (vars[k] != null ? String(vars[k]) : ''));
+  return out
+    .replace(/\s*[-–—]\s*[-–—]\s*/g, ' - ') // collapse "- -" from an empty middle token
+    .replace(/^\s*[-–—]\s*/, '')            // drop a leading separator
+    .replace(/\s*[-–—]\s*$/, '')            // drop a trailing separator
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+const PLATFORM_LABELS = { mypos: 'myPOS', shopify: 'Shopify', sumup: 'SumUp', wise: 'Wise', cash: 'Cash' };
+function clusterPlatform(c) {
+  const srcs = [...new Set((c.txns || []).map(t => t.source).filter(Boolean))];
+  const named = srcs.map(s => PLATFORM_LABELS[s] || s);
+  return named.length ? named.join(' + ') : 'POS';
+}
+function monthLabelOf(d) {
+  return d ? d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '';
+}
+// Domestic (German) sales carry VAT; foreign events are 0% (export/reverse charge).
+function isGermany(country) {
+  return /^(germany|deutschland|de|ger|deu)$/i.test(String(country || '').trim());
+}
+function vatRateFor(country) {
+  const dv = Number((window.cfgValues || {}).LEXWARE_DOMESTIC_VAT);
+  const domestic = Number.isFinite(dv) && dv >= 0 ? dv : 19;
+  return isGermany(country) ? domestic : 0;
+}
+function templateVars(c) {
+  const ev = c.matchedEvent;
+  const name = (c.customName && c.customName.trim()) || (ev && ev.name) || '';
+  const country = c.country || (ev && ev.venue && ev.venue.country) || '';
+  const start = ev ? ev.dateStart : isoDay(c.startDate);
+  const end = ev ? ev.dateEnd : isoDay(c.endDate);
+  return {
+    sales_platform: clusterPlatform(c),
+    event_name: name,
+    event_country: country,
+    event_start: start,
+    event_end: end,
+    month: monthLabelOf(c.startDate),
+    month_num: `${c.startDate.getFullYear()}-${String(c.startDate.getMonth() + 1).padStart(2, '0')}`,
+    year: String(c.startDate.getFullYear()),
+    vat_rate: `${vatRateFor(country)}%`,
+    cluster_id: c.clusterID || '',
+    total: fmtAmt(c.totalPay + (c.cashAmount || 0)),
+    currency: c.baseCurrency || 'EUR',
+  };
+}
+function tpl(key, fallback, vars) {
+  const cfg = window.cfgValues || {};
+  return renderTemplate((cfg[key] && cfg[key].trim()) || fallback, vars);
 }
 function renderBridgeStatus(st) {
   const el = document.getElementById('bridgeStatus');
@@ -2032,11 +2133,14 @@ async function postBook(payload, signal) {
 // cluster still has no name.
 function buildRevenuePayload(c) {
   const total = c.totalPay + (c.cashAmount || 0);
+  const vars = templateVars(c);
   let payload;
   if (c.isOnlineCluster) {
-    payload = { kind: 'revenue', voucherNumber: `${c.clusterID}_P`, customer: 'contact', customerName: 'Revenue - Online Sales',
+    const title = tpl('LEXWARE_ONLINE_TITLE_TEMPLATE', 'Revenue - Online Sales', vars) || 'Revenue - Online Sales';
+    const desc = tpl('LEXWARE_ONLINE_DESC_TEMPLATE', '[sales_platform] - [month]', vars);
+    payload = { kind: 'revenue', voucherNumber: `${c.clusterID}_P`, customer: 'contact', customerName: title,
       voucherDate: isoDay(c.startDate), dueDate: isoDay(c.endDate), totalGrossAmount: total, taxType: 'gross', category: 'einnahmen',
-      remark: `Online Sales - ${c.clusterID}` };
+      remark: desc };
   } else {
     const ev = c.matchedEvent;
     const name = (c.customName && c.customName.trim()) || (ev && ev.name) || '';
@@ -2044,10 +2148,14 @@ function buildRevenuePayload(c) {
     const country = c.country || (ev && ev.venue && ev.venue.country) || undefined;
     const startDate = ev ? ev.dateStart : isoDay(c.startDate);
     const endDate = ev ? ev.dateEnd : isoDay(c.endDate);
-    payload = { kind: 'revenue', voucherNumber: `${c.clusterID}_P`, customer: 'contact',
-      event: { name, country, startDate, endDate, vatRate: 0 },
+    const title = tpl('LEXWARE_EVENT_TITLE_TEMPLATE', 'Revenue - [event_name]', vars) || `Revenue - ${name}`;
+    const desc = tpl('LEXWARE_EVENT_DESC_TEMPLATE', 'Point of Sales - [event_name] - [event_country]', vars);
+    // German events are domestic → VAT (default 19%); foreign events stay 0%.
+    const vatRate = vatRateFor(country);
+    payload = { kind: 'revenue', voucherNumber: `${c.clusterID}_P`, customer: 'contact', customerName: title,
+      event: { name, country, startDate, endDate, vatRate },
       totalGrossAmount: total, taxType: 'gross', category: 'einnahmen',
-      remark: ['Point of Sales', name, country].filter(Boolean).join(' - ') };
+      remark: desc };
   }
   payload.pdfBase64 = exportPDF(c.uid, 'payments', { returnBase64: true });
   payload.filename = `${c.clusterID}_P.pdf`;
@@ -2105,15 +2213,23 @@ async function bookMonthFees(key) {
   if (totalFee <= 0) { alert('No fees in this month.'); return; }
   const pdfBase64 = exportMonthPDF(key, 'fees', { returnBase64: true });
   const [yr, mo] = key.split('_');
+  // Platform for the fee line: whatever sources have fees this month (usually myPOS).
+  const feeSrcs = [...new Set(clusters.filter(c => c.totalFee > 0).flatMap(c => (c.txns || []).map(t => t.source)).filter(Boolean))];
+  const feeVars = {
+    sales_platform: feeSrcs.length ? feeSrcs.map(s => PLATFORM_LABELS[s] || s).join(' + ') : 'myPOS',
+    month: monthLabelOf(new Date(Number(yr), Number(mo) - 1, 1)),
+    month_num: `${yr}-${mo}`, year: yr, cluster_id: `PN_${key}_F`,
+  };
+  const desc = tpl('LEXWARE_FEE_DESC_TEMPLATE', '[sales_platform] fees [month]', feeVars) || `myPOS fees ${getMonthLabel(key)}`;
   const payload = { kind: 'fees', voucherNumber: `PN_${key}_F`, voucherDate: `${yr}-${mo}-28`,
     totalGrossAmount: totalFee, taxType: 'gross', taxRatePercent: 0,
-    remark: `myPOS fees ${getMonthLabel(key)}`, pdfBase64, filename: `PN_${key}_F.pdf` };
+    remark: desc, pdfBase64, filename: `PN_${key}_F.pdf` };
   try {
     await postBook({ ...payload, dryRun: true });
-    if (!confirm(`Book monthly myPOS fees ${fmtAmt(totalFee)} as PN_${key}_F?`)) return;
+    if (!confirm(`Book monthly fees ${fmtAmt(totalFee)} as PN_${key}_F?`)) return;
     const res = await postBook({ ...payload, dryRun: false });
     alert('Fees booked ✓\n' + res.permalink);
-  } catch (e) { alert('Lexware fees: ' + e.message + (/category/i.test(e.message) ? '\n\nSet LEXWARE_FEE_CATEGORY in the tool .env.' : '')); }
+  } catch (e) { alert('Lexware fees: ' + e.message + (/category/i.test(e.message) ? '\n\nSet the fee category under ⚙ Settings → Lexware Office.' : '')); }
 }
 // ── Event-duration timeline: colored vertical lines in a left gutter, one per
 // ZollTool event, spanning the cluster cards that fall within its dates. ──────
@@ -2346,17 +2462,39 @@ async function submitLogin(e) {
   msg.textContent = '';
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
+  const code = document.getElementById('loginCode').value.trim();
   try {
     const res = await fetch('/api/auth/login', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, code }),
     });
     const d = await res.json();
-    if (!res.ok) { msg.textContent = d.error || 'Login failed'; return false; }
+    if (!res.ok) {
+      if (d.needs2fa) { // second factor required — reveal the code field
+        document.getElementById('loginCodeField').style.display = '';
+        document.getElementById('loginCode').focus();
+        msg.textContent = code ? (d.error || 'Invalid code') : '';
+        return false;
+      }
+      msg.textContent = d.error || 'Login failed';
+      return false;
+    }
     document.getElementById('loginPassword').value = '';
+    document.getElementById('loginCode').value = '';
+    document.getElementById('loginCodeField').style.display = 'none';
     onAuthenticated(d.user);
   } catch { msg.textContent = 'Server unreachable.'; }
   return false;
+}
+
+// Fetch a proof-of-work CAPTCHA challenge and solve it in-browser (solver.js).
+async function solveCaptchaChallenge(onProgress) {
+  const ch = await fetch('/api/captcha/challenge').then(r => r.json());
+  const captchaSolution = await new Promise((resolve) => {
+    // Yield to the event loop so the "verifying" UI can paint before the loop.
+    setTimeout(() => resolve(solveCaptcha(ch.nonce, ch.difficulty, onProgress)), 20);
+  });
+  return { captchaToken: ch.token, captchaSolution };
 }
 
 async function doLogout() {
@@ -2403,16 +2541,24 @@ async function submitSetup(e) {
   const password = document.getElementById('setupPassword').value;
   if (password.length < 8) { msg.textContent = 'Password must be at least 8 characters.'; return false; }
   if (password !== document.getElementById('setupPassword2').value) { msg.textContent = 'Passwords do not match.'; return false; }
+  const btn = document.getElementById('setupBtn');
+  btn.disabled = true;
+  const original = btn.textContent;
+  btn.textContent = 'Verifying you’re human…';
+  msg.className = 'form-msg'; msg.textContent = '';
   try {
+    const cap = await solveCaptchaChallenge();
+    btn.textContent = 'Creating…';
     const res = await fetch('/api/setup', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email, name, password }),
+      body: JSON.stringify({ email, name, password, ...cap }),
     });
     const d = await res.json();
-    if (!res.ok) { msg.textContent = d.error || 'Setup failed'; return false; }
+    if (!res.ok) { msg.className = 'form-msg bad'; msg.textContent = d.error || 'Setup failed'; return false; }
     document.getElementById('setupOverlay').style.display = 'none';
     onAuthenticated(d.user);
-  } catch { msg.textContent = 'Server unreachable.'; }
+  } catch { msg.className = 'form-msg bad'; msg.textContent = 'Server unreachable.'; }
+  finally { btn.disabled = false; btn.textContent = original; }
   return false;
 }
 
@@ -2426,27 +2572,43 @@ async function openConfig() {
   host.innerHTML = '<p style="color:var(--muted);font-size:.8rem">Loading…</p>';
   try {
     const d = await fetch('/api/config').then(r => r.json());
-    configSchema = d.groups; window.configValues = d.values;
+    configSchema = d.groups; window.configValues = d.values; window.cfgValues = d.values;
     renderConfig(d.groups, d.values);
   } catch { host.innerHTML = '<p class="form-msg bad">Could not load settings.</p>'; }
 }
 function closeConfig() { document.getElementById('configOverlay').style.display = 'none'; }
 
+// Sample data used to preview title/description templates live in Settings.
+const SAMPLE_VARS = {
+  sales_platform: 'Shopify', event_name: 'Japan Expo', event_country: 'France',
+  event_start: '2026-07-02', event_end: '2026-07-05', month: 'August 2026',
+  month_num: '2026-08', year: '2026', vat_rate: '0%', cluster_id: 'PN_2026_08_001', total: '€1,234.56', currency: 'EUR',
+};
 function renderConfig(groups, values) {
   const host = document.getElementById('configGroups');
   host.innerHTML = groups.map(g => {
     const fields = g.fields.map(f => {
       const isSecret = !!f.secret;
+      const isTemplate = !!f.template;
       const set = isSecret && values[f.key + '__set'];
       const val = isSecret ? '' : (values[f.key] || '');
       const savedTag = set ? '<span class="saved-tag">saved</span><span class="clear-link" data-clear="' + f.key + '" onclick="toggleClear(this)">clear</span>' : '';
       const ph = f.placeholder ? ` placeholder="${f.placeholder}"` : (isSecret && set ? ' placeholder="•••••••• (unchanged)"' : '');
       const hint = f.hint ? `<div class="hint">${f.hint}</div>` : '';
+      const tplAttrs = isTemplate ? ' data-template="1" oninput="updateTplPreview(this)"' : '';
+      const preview = isTemplate ? `<div class="hint tpl-preview" id="tplprev-${f.key}"></div>` : '';
       return `<div class="field"><label>${f.label}${savedTag}</label>` +
-        `<input data-key="${f.key}" data-secret="${isSecret ? 1 : 0}" type="${isSecret ? 'password' : 'text'}" value="${String(val).replace(/"/g,'&quot;')}"${ph} autocomplete="off">${hint}</div>`;
+        `<input data-key="${f.key}" data-secret="${isSecret ? 1 : 0}"${tplAttrs} type="${isSecret ? 'password' : 'text'}" value="${String(val).replace(/"/g,'&quot;')}"${ph} autocomplete="off">${hint}${preview}</div>`;
     }).join('');
     return `<div class="cfg-group"><h3>${g.label}</h3><div class="ghint">${g.hint || ''}</div>${fields}</div>`;
   }).join('');
+  document.querySelectorAll('#configGroups input[data-template="1"]').forEach(updateTplPreview);
+}
+function updateTplPreview(inp) {
+  const el = document.getElementById('tplprev-' + inp.dataset.key);
+  if (!el) return;
+  const str = inp.value.trim() || inp.placeholder || '';
+  el.textContent = 'Example: ' + (renderTemplate(str, SAMPLE_VARS) || '—');
 }
 function toggleClear(el) {
   el.dataset.on = el.dataset.on === '1' ? '0' : '1';
@@ -2477,7 +2639,7 @@ async function saveConfig() {
     });
     const d = await res.json();
     if (!res.ok) { msg.className = 'form-msg bad'; msg.textContent = d.error || 'Save failed'; return; }
-    window.configValues = d.values;
+    window.configValues = d.values; window.cfgValues = d.values;
     renderConfig(configSchema, d.values);
     msg.className = 'form-msg ok'; msg.textContent = 'Saved.';
     loadBridge(); // refresh integration status dots
@@ -2490,6 +2652,7 @@ async function openAdminUsers() {
   document.getElementById('usersOverlay').style.display = 'flex';
   document.getElementById('usersMsg').textContent = '';
   await refreshUsers();
+  refreshAdminSessions();
 }
 function closeAdminUsers() { document.getElementById('usersOverlay').style.display = 'none'; }
 
@@ -2538,6 +2701,129 @@ async function deleteUserAccount(id, email) {
     if (!res.ok) { document.getElementById('usersMsg').className = 'form-msg bad'; document.getElementById('usersMsg').textContent = d.error || 'Failed'; return; }
     refreshUsers();
   } catch { /* ignore */ }
+}
+
+// ── Security: 2FA + your sessions ──
+function openSecurity() {
+  document.getElementById('securityOverlay').style.display = 'flex';
+  load2fa();
+  refreshMySessions();
+}
+function closeSecurity() { document.getElementById('securityOverlay').style.display = 'none'; }
+
+async function load2fa() {
+  const host = document.getElementById('twofaBody');
+  try {
+    const d = await fetch('/api/2fa/status').then(r => r.json());
+    render2fa(d.enabled);
+  } catch { host.innerHTML = '<p class="form-msg bad">Could not load 2FA status.</p>'; }
+}
+function render2fa(enabled) {
+  const host = document.getElementById('twofaBody');
+  host.innerHTML = enabled
+    ? '<div style="display:flex;align-items:center;gap:10px"><span class="badge-on">● Enabled</span>' +
+      '<button class="btn-ghost" onclick="disable2fa()">Disable…</button></div>'
+    : '<button class="btn-primary" onclick="start2faSetup()">Enable 2FA</button>';
+}
+async function start2faSetup() {
+  const host = document.getElementById('twofaBody');
+  host.innerHTML = '<p style="color:var(--muted);font-size:.8rem">Preparing…</p>';
+  try {
+    const d = await fetch('/api/2fa/setup', { method: 'POST' }).then(r => r.json());
+    const key = d.secret.replace(/(.{4})/g, '$1 ').trim();
+    host.innerHTML =
+      '<p class="modal-sub" style="margin-bottom:8px">Add this account to your authenticator app — scan is coming soon; for now enter the key or tap the link on your phone:</p>' +
+      '<div class="field"><label>Setup key</label><code style="display:block;background:var(--surface2);border-radius:8px;padding:9px 11px;font-size:.9rem;letter-spacing:.05em">' + key + '</code></div>' +
+      '<p style="margin:2px 0 12px"><a href="' + d.otpauth.replace(/"/g, '&quot;') + '" style="color:var(--accent2);font-size:.8rem">📲 Open in authenticator app</a></p>' +
+      '<div class="field"><label>Enter the 6-digit code to confirm</label><input id="twofaConfirm" type="text" inputmode="numeric" placeholder="123456"></div>' +
+      '<button class="btn-primary" onclick="confirm2fa()">Verify & enable</button>' +
+      '<button class="btn-ghost" onclick="load2fa()" style="margin-left:8px">Cancel</button>' +
+      '<div id="twofaMsg" class="form-msg bad" style="margin-top:8px"></div>';
+    document.getElementById('twofaConfirm').focus();
+  } catch { host.innerHTML = '<p class="form-msg bad">Setup failed.</p>'; }
+}
+async function confirm2fa() {
+  const code = document.getElementById('twofaConfirm').value.trim();
+  const msg = document.getElementById('twofaMsg');
+  msg.textContent = '';
+  try {
+    const res = await fetch('/api/2fa/enable', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) });
+    const d = await res.json();
+    if (!res.ok) { msg.textContent = d.error || 'Failed'; return; }
+    showRecoveryCodes(d.recovery);
+  } catch { msg.textContent = 'Server unreachable.'; }
+}
+function showRecoveryCodes(codes) {
+  const host = document.getElementById('twofaBody');
+  host.innerHTML =
+    '<div class="badge-on" style="margin-bottom:10px">● 2FA enabled</div>' +
+    '<p class="modal-sub" style="margin-bottom:8px">Save these <strong>recovery codes</strong> somewhere safe. Each works once if you lose your authenticator — they won\'t be shown again.</p>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--surface2);border-radius:10px;padding:12px;font-family:monospace;font-size:.85rem">' +
+    codes.map(c => '<span>' + c + '</span>').join('') + '</div>' +
+    '<button class="btn-ghost" style="margin-top:12px" onclick="navigator.clipboard.writeText(' + JSON.stringify(codes.join('\n')) + ').then(()=>showToast&&showToast(\'copied\'))">Copy codes</button>' +
+    '<button class="btn-primary" style="margin-left:8px" onclick="load2fa()">Done</button>';
+}
+async function disable2fa() {
+  const code = prompt('Enter an authenticator or recovery code to disable 2FA:');
+  if (!code) return;
+  try {
+    const res = await fetch('/api/2fa/disable', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) });
+    const d = await res.json();
+    if (!res.ok) { alert(d.error || 'Failed'); return; }
+    load2fa();
+  } catch { alert('Server unreachable.'); }
+}
+
+function fmtAgo(ts) {
+  const m = Math.round((Date.now() - ts) / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return m + 'm ago';
+  const h = Math.round(m / 60);
+  if (h < 24) return h + 'h ago';
+  return Math.round(h / 24) + 'd ago';
+}
+function geoLabel(s) {
+  if (s.geo && (s.geo.city || s.geo.country)) return [s.geo.city, s.geo.country].filter(Boolean).join(', ');
+  return '';
+}
+function sessionRow(s, opts) {
+  const geo = geoLabel(s);
+  const meta = [s.device || 'Unknown device', s.ip, geo].filter(Boolean).join(' · ');
+  const who = opts.admin ? '<span style="font-weight:600">' + (s.email || '') + '</span> ' + (s.role === 'admin' ? '<span class="um-role admin">admin</span>' : '') : '';
+  const cur = s.current ? '<span class="badge-on" style="font-size:.6rem;margin-left:6px">this device</span>' : '';
+  const canRevoke = opts.admin || !s.current;
+  const btn = canRevoke ? '<button class="edt-btn edt-btn-danger" onclick="' + (opts.admin ? 'revokeAdminSession' : 'revokeMySession') + '(\'' + s.id + '\')">Log out</button>' : '';
+  return '<div class="user-row">' +
+    '<div class="min-w-0" style="flex:1;min-width:0"><div style="font-size:.82rem">' + who + (s.device || 'Session') + cur + '</div>' +
+    '<div style="font-size:.72rem;color:var(--muted)">' + meta + ' · active ' + fmtAgo(s.lastSeenAt) + '</div></div>' + btn + '</div>';
+}
+async function refreshMySessions() {
+  const host = document.getElementById('mySessions');
+  host.innerHTML = '<p style="color:var(--muted);font-size:.8rem">Loading…</p>';
+  try {
+    const d = await fetch('/api/sessions').then(r => r.json());
+    document.getElementById('mySessGeoNote').textContent = d.geo ? '' : 'Location lookup is off — showing IP + device only.';
+    host.innerHTML = d.sessions.map(s => sessionRow(s, { admin: false })).join('') || '<p class="empty">No sessions.</p>';
+  } catch { host.innerHTML = '<p class="form-msg bad">Could not load sessions.</p>'; }
+}
+async function revokeMySession(id) {
+  if (!confirm('Log out this session?')) return;
+  await fetch('/api/sessions/' + encodeURIComponent(id), { method: 'DELETE' }).catch(() => {});
+  refreshMySessions();
+}
+async function refreshAdminSessions() {
+  const host = document.getElementById('adminSessions');
+  host.innerHTML = '<p style="color:var(--muted);font-size:.8rem">Loading…</p>';
+  try {
+    const d = await fetch('/api/admin/sessions').then(r => r.json());
+    document.getElementById('adminSessGeoNote').textContent = d.geo ? '' : 'Location lookup is off (set ZOLLTAX_GEO=1) — showing IP + device only.';
+    host.innerHTML = d.sessions.map(s => sessionRow(s, { admin: true })).join('') || '<p class="empty">No active sessions.</p>';
+  } catch { host.innerHTML = '<p class="form-msg bad">Could not load sessions.</p>'; }
+}
+async function revokeAdminSession(id) {
+  if (!confirm('Force this session to log out?')) return;
+  await fetch('/api/admin/sessions/' + encodeURIComponent(id), { method: 'DELETE' }).catch(() => {});
+  refreshAdminSessions();
 }
 
 document.addEventListener('DOMContentLoaded', boot);

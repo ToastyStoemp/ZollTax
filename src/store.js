@@ -17,7 +17,7 @@ import { hashPassword, verifyPassword, encryptJson, decryptJson, randomId } from
 import { CONFIG_KEYS } from './config-schema.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = process.env.ZOLLTAX_DATA_DIR
+export const DATA_DIR = process.env.ZOLLTAX_DATA_DIR
   ? process.env.ZOLLTAX_DATA_DIR
   : join(__dirname, '..', 'data');
 const USERS_FILE = join(DATA_DIR, 'users.json');
@@ -89,6 +89,26 @@ export function authenticate(email, password) {
   if (!user || user.disabledAt) return null;
   if (!verifyPassword(password, user.passwordHash)) return null;
   return publicUser(user);
+}
+
+/** Raw record — server-side only (includes passwordHash + 2FA fields). */
+export function getUserRecord(id) {
+  return readUsers().find((u) => u.id === id) || null;
+}
+
+/** Merge a small patch of allowed fields (2FA state, name) into a user record. */
+export function patchUser(id, patch) {
+  const users = readUsers();
+  const u = users.find((x) => x.id === id);
+  if (!u) throw new Error('User not found.');
+  for (const k of ['totpEnc', 'totpEnabled', 'recovery', 'name']) if (k in patch) u[k] = patch[k];
+  writeUsers(users);
+  return publicUser(u);
+}
+
+export function has2fa(id) {
+  const u = getUserRecord(id);
+  return !!(u && u.totpEnabled);
 }
 
 export function setPassword(id, password) {
