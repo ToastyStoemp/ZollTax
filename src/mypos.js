@@ -1,4 +1,5 @@
 import { config } from './config.js';
+import { cacheGet, cacheSet } from './cache.js';
 
 /**
  * myPOS Banking API client (via the myPOS API Gateway) — used to VERIFY a
@@ -41,7 +42,7 @@ export function loadMyposConfig(env = process.env) {
     merchantClientSecret,
     partnerId,
     applicationId,
-    scope: env.MYPOS_SCOPE || 'banking.read',
+    scope: env.MYPOS_SCOPE || '',
     account: env.MYPOS_ACCOUNT || undefined,
   };
 }
@@ -57,6 +58,7 @@ export class MyposError extends Error {
 export class MyposClient {
   #token;
   #session;
+  #deviceCacheObj = null; // serial_number → friendly name (persisted to disk)
 
   constructor(cfg = loadMyposConfig()) {
     this.config = cfg;
@@ -66,11 +68,64 @@ export class MyposClient {
     return this.config.mode;
   }
 
-  /** Normalized settled transactions for a window. */
-  async listTransactions({ from, to, account }) {
+  /** The merchant's accounts (account_number, iban, currency, name). */
+  async listAccounts() {
+    if (this.config.mode === 'mock') {
+      return [{ account_number: 'MOCK-EUR', iban: 'IE00MOCK', currency: 'EUR', name: 'Mock EUR Account' }];
+    }
+    const json = await this.#get(`${this.config.gatewayUrl}/accounting/v1/accounts`);
+    return json?.items || [];
+  }
+
+  /** Normalized card transactions for a window, optionally scoped to accounts. */
+  async listTransactions({ from, to, account, accounts }) {
     if (this.config.mode === 'mock') return mockTransactions({ from, to });
-    const rows = await this.#fetchAllRows({ from, to, account });
-    return rows.map(normalize).filter(Boolean);
+    const rows = await this.#fetchAllRows({ from, to, account, accounts });
+    const txns = rows.map(normalize).filter(Boolean);
+    await this.#applyDeviceNames(txns);
+    return txns;
+  }
+
+  // Persistent serial_number → friendly-name cache (loaded once from disk).
+  #deviceCache() {
+    if (!this.#deviceCacheObj) this.#deviceCacheObj = cacheGet('mypos-devices.json') || {};
+    return this.#deviceCacheObj;
+  }
+
+  /**
+   * Label each transaction's device with its friendly name. Devices are grouped
+   * by serial_number (stable across TID changes); the name is looked up once per
+   * serial — from the most recent transaction's TID — and cached to disk, so we
+   * hit the Terminals API at most once per new device ever.
+   */
+  async #applyDeviceNames(txns) {
+    const cache = this.#deviceCache();
+    const groups = new Map();
+    for (const t of txns) {
+      const serial = t.serial || t.terminal;
+      if (!serial) continue;
+      (groups.get(serial) || groups.set(serial, []).get(serial)).push(t);
+    }
+    let changed = false;
+    for (const [serial, group] of groups) {
+      if (!cache[serial]) {
+        const recent = group.reduce((a, b) => (String(b.dateTime) > String(a.dateTime) ? b : a));
+        cache[serial] = (await this.#lookupTerminalName(recent.terminal)) || recent.terminal || serial;
+        changed = true;
+      }
+      for (const t of group) t.terminal = cache[serial];
+    }
+    if (changed) cacheSet('mypos-devices.json', cache);
+  }
+
+  async #lookupTerminalName(tid) {
+    if (!tid) return '';
+    try {
+      const d = await this.#get(`${this.config.gatewayUrl}/pos/v1/terminals/${encodeURIComponent(tid)}`);
+      return String(d?.terminal_name || '').replace(/^myPOS\s+/i, '').trim();
+    } catch {
+      return '';
+    }
   }
 
   async #accessToken(force = false) {
@@ -83,8 +138,10 @@ export class MyposClient {
       grant_type: 'client_credentials',
       client_id: this.config.clientId,
       client_secret: this.config.clientSecret,
-      scope: this.config.scope,
     });
+    // Only send scope when explicitly configured — the gateway assigns the
+    // integration's own scopes automatically, and an unlisted scope is rejected.
+    if (this.config.scope) body.set('scope', this.config.scope);
     const res = await fetch(`${this.config.gatewayUrl}/api/v1/oauth/token`, {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
@@ -119,21 +176,47 @@ export class MyposClient {
     return this.#session.value;
   }
 
-  async #fetchAllRows({ from, to, account }) {
-    const out = [];
+  /** The merchant's account numbers (one per currency). */
+  async #accountNumbers() {
+    const json = await this.#get(`${this.config.gatewayUrl}/accounting/v1/accounts`);
+    return (json?.items || []).map((a) => String(a.account_number)).filter(Boolean);
+  }
+
+  async #fetchAllRows({ from, to, account, accounts: wanted }) {
+    // The transactions endpoint is per-account and requires from_date/to_date.
+    // Use the explicitly-selected accounts, else a single configured account,
+    // else pull across every account (all currencies).
     const acct = account ?? this.config.account;
+    const accounts =
+      Array.isArray(wanted) && wanted.length ? wanted : acct ? [acct] : await this.#accountNumbers();
+    // A window fully in the past never changes → cache it permanently.
+    const stable = to < new Date().toISOString().slice(0, 10);
+    // Warm auth once so the parallel per-account fetches reuse the token/session.
+    await this.#sessionId();
+    const perAccount = await Promise.all(accounts.map((a) => this.#fetchAccountRows(a, from, to, stable)));
+    return perAccount.flat();
+  }
+
+  async #fetchAccountRows(accountNumber, from, to, stable) {
+    const key = `mypos-tx__${accountNumber}__${from}__${to}.json`;
+    const cached = cacheGet(key);
+    // Reuse a cached pull for a stable (past) window, or a recent one <10 min old.
+    if (cached && (stable || Date.now() - cached.fetchedAt < 10 * 60 * 1000)) return cached.rows;
+    const rows = [];
     for (let page = 1; page <= 200; page++) {
       const url = new URL(`${this.config.gatewayUrl}/accounting/v1/transactions`);
-      url.searchParams.set('from', from);
-      url.searchParams.set('to', to);
+      url.searchParams.set('account_number', accountNumber);
+      url.searchParams.set('from_date', from);
+      url.searchParams.set('to_date', to);
       url.searchParams.set('page', String(page));
-      if (acct) url.searchParams.set('account', acct);
+      url.searchParams.set('page_size', '500'); // fewer round-trips
       const json = await this.#get(url.toString());
-      const rows = extractRows(json);
-      out.push(...rows);
-      if (!hasNextPage(json, rows.length)) break;
+      const pageRows = extractRows(json);
+      rows.push(...pageRows);
+      if (!hasNextPage(json, pageRows.length)) break;
     }
-    return out;
+    cacheSet(key, { fetchedAt: Date.now(), rows });
+    return rows;
   }
 
   async #get(url) {
@@ -196,6 +279,7 @@ export function extractRows(json) {
 function hasNextPage(json, rowsThisPage) {
   const o = json ?? {};
   const pg = o.pagination ?? o.meta ?? o;
+  if (typeof pg.has_next_page === 'boolean') return pg.has_next_page;
   if (typeof pg.has_more === 'boolean') return pg.has_more;
   if (typeof pg.hasNextPage === 'boolean') return pg.hasNextPage;
   const page = num(pick(pg, ['page', 'current_page', 'currentPage']));
@@ -204,25 +288,31 @@ function hasNextPage(json, rowsThisPage) {
   return rowsThisPage >= 100;
 }
 
+/**
+ * Normalize one myPOS Banking API transaction. The endpoint returns the full
+ * account ledger; only rows with a `terminal_id` are card-terminal activity —
+ * that filter naturally excludes bank transfers, payouts, the merchant's own
+ * card spending, and non-card fees. A Credit is a card sale (Payment); a Debit
+ * is the card fee. transaction_amount is already signed (+ sale / − fee).
+ */
 export function normalize(row) {
-  const amount = round2(num(pick(row, ['amount', 'grossAmount', 'gross_amount', 'value'])));
+  const terminal = str(pick(row, ['terminal_id', 'terminalId']));
+  if (!terminal) return null;
+  const amount = round2(num(pick(row, ['transaction_amount', 'amount', 'value'])));
   if (!amount) return null;
-  const currency = str(pick(row, ['currency', 'currencyCode', 'currency_code'])) ?? 'EUR';
-  let fee = num(pick(row, ['fee', 'feeAmount', 'fee_amount', 'commission', 'charge']));
-  const netRaw = pick(row, ['net', 'netAmount', 'net_amount', 'settledAmount', 'settled_amount']);
-  if (!fee && netRaw != null) fee = amount - num(netRaw);
-  fee = round2(Math.max(0, fee));
+  const isFee = String(pick(row, ['sign']) ?? '').toLowerCase() === 'debit';
   return {
-    reference: str(pick(row, ['reference', 'payment_reference', 'paymentReference', 'id', 'trn_ref'])) ?? '',
-    dateTime:
-      str(pick(row, ['dateTime', 'date_time', 'date', 'createdAt', 'created_at', 'timestamp'])) ??
-      new Date().toISOString(),
-    amount,
-    currency,
-    fee,
-    net: round2(amount - fee),
-    type: 'Payment',
-    card: str(pick(row, ['card', 'cardBrand', 'card_brand', 'scheme', 'paymentMethod', 'payment_method'])),
+    reference: str(pick(row, ['payment_reference', 'reference', 'id'])) ?? '',
+    dateTime: str(pick(row, ['date', 'dateTime', 'created_at'])) ?? new Date().toISOString(),
+    amount, // signed: + for a Credit (sale), − for a Debit (fee)
+    currency: str(pick(row, ['transaction_currency', 'currency'])) ?? 'EUR',
+    fee: 0,
+    net: 0,
+    type: isFee ? 'Fee' : 'Payment',
+    terminal,
+    serial: str(pick(row, ['serial_number'])),
+    card: str(pick(row, ['pan', 'card'])),
+    desc: str(pick(row, ['description', 'billing_descriptor'])),
   };
 }
 

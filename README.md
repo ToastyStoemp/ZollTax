@@ -3,7 +3,7 @@
 Two things live here:
 
 1. **Web app** (`npm run web`) — ZollTax, the convention **payment-cluster** tool: upload
-   myPOS transaction exports / statements, Shopify, and Wise files; it clusters
+   myPOS transaction exports / statements, Shopify, SumUp, and Wise files; it clusters
    transactions into conventions, matches each cluster to a **ZollTool event**,
    **verifies** the totals against the live **myPOS Banking API**, and books the
    report into **Lexware** — revenue per event (online sales monthly), fees as one
@@ -30,12 +30,15 @@ npm run web               # → http://localhost:4000
 | `MYPOS_*` | myPOS Banking API gateway creds (Partner Portal). Unset → mock verify data. |
 | `SHOPIFY_SHOP` / `SHOPIFY_CLIENT_ID` / `SHOPIFY_CLIENT_SECRET` | Shopify Dev Dashboard app credentials. The backend exchanges these for an Admin API token automatically (read_orders, read_locations). Unset → mock pull data. |
 | `SHOPIFY_ACCESS_TOKEN` | Optional legacy/static Admin API token fallback if you already have one. |
+| `SUMUP_API_KEY` / `SUMUP_MERCHANT_CODE` | SumUp transaction-history API credentials. Unset -> mock pull data. |
 
 Flow: **upload** payment files (or **Pull Shopify** orders for a date range) →
 clusters render → **match** each to a ZollTool event (auto-suggested by overlapping
 dates, or **✨ Auto merge & match** all at once) → **Verify vs myPOS** (badge) →
 **Book revenue to Lexware** per cluster (or **⇪ Book all ready**) / **Book fees**
 per month. Booking previews a dry-run and asks before it writes.
+
+SumUp transactions can be pulled directly from the API and are normalized into POS/online payment clusters with fee rows when the API returns fee data.
 
 Shopify **online** orders (no location) are grouped into one **monthly online
 report** (`PN_YYYY_MM_ONL`) and booked as monthly online revenue; Shopify **POS**

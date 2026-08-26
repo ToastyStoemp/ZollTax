@@ -9,6 +9,7 @@ import { buildFeeVoucher } from './expense.js';
 import { MyposClient, summarize } from './mypos.js';
 import { ZolltoolClient } from './zolltool.js';
 import { ShopifyClient } from './shopify.js';
+import { SumupClient } from './sumup.js';
 
 /**
  * ZollTax backend: serves the cluster UI (public/) and a small JSON
@@ -61,12 +62,14 @@ async function serveStatic(req, res) {
 const zoll = new ZolltoolClient();
 const mypos = new MyposClient();
 const shopify = new ShopifyClient();
+const sumup = new SumupClient();
 
 const routes = {
   'GET /api/status': async () => ({
     zolltool: { configured: zoll.configured, url: zoll.config.url || null },
     mypos: { mode: mypos.mode },
     shopify: await shopify.status({ warmToken: true }),
+    sumup: sumup.status(),
     lexware: { configured: !!config.apiKey, feeCategory: !!process.env.LEXWARE_FEE_CATEGORY },
   }),
 
@@ -83,6 +86,30 @@ const routes = {
     return { transactions: txns };
   },
 
+  // Cash revenue for a ZollTool event: sum of the cash payment legs across its
+  // (non-reverted) sales, converted to the event's base currency.
+  'GET /api/zolltool/cash': async (url) => {
+    const eventId = url.searchParams.get('eventId');
+    if (!eventId) throw new HttpError(400, 'eventId is required.');
+    const txns = await zoll.getEventTransactions(eventId);
+    let cash = 0, currency = 'EUR', count = 0;
+    for (const t of txns) {
+      if (t.revertedBy) continue;
+      const legs = (t.payments || []).filter((p) => p.kind === 'cash');
+      if (!legs.length) continue;
+      const rate = t.exchangeRate || 1; // base -> charged currency
+      cash += legs.reduce((s, p) => s + (Number(p.amount) || 0), 0) / rate;
+      currency = t.baseCurrency || t.currency || currency;
+      count++;
+    }
+    return { eventId, cash: Math.round(cash * 100) / 100, currency, count };
+  },
+
+  'GET /api/mypos/accounts': async () => {
+    const accounts = await mypos.listAccounts();
+    return { mode: mypos.mode, accounts };
+  },
+
   'GET /api/mypos/verify': async (url) => {
     const from = url.searchParams.get('from');
     const to = url.searchParams.get('to');
@@ -92,12 +119,30 @@ const routes = {
     return { mode: mypos.mode, summary: summarize(txns), from, to };
   },
 
+  'GET /api/mypos/transactions': async (url) => {
+    const from = url.searchParams.get('from');
+    const to = url.searchParams.get('to');
+    if (!from || !to) throw new HttpError(400, 'from and to are required (YYYY-MM-DD).');
+    const accountsParam = url.searchParams.get('accounts');
+    const accounts = accountsParam ? accountsParam.split(',').filter(Boolean) : undefined;
+    const transactions = await mypos.listTransactions({ from, to, accounts });
+    return { mode: mypos.mode, count: transactions.length, from, to, transactions };
+  },
+
   'GET /api/shopify/orders': async (url) => {
     const from = url.searchParams.get('from');
     const to = url.searchParams.get('to');
     if (!from || !to) throw new HttpError(400, 'from and to are required (YYYY-MM-DD).');
     const orders = await shopify.listOrders({ from, to });
     return { mode: shopify.mode, count: orders.length, from, to, orders };
+  },
+
+  'GET /api/sumup/transactions': async (url) => {
+    const from = url.searchParams.get('from');
+    const to = url.searchParams.get('to');
+    if (!from || !to) throw new HttpError(400, 'from and to are required (YYYY-MM-DD).');
+    const transactions = await sumup.listTransactions({ from, to });
+    return { mode: sumup.mode, count: transactions.length, from, to, transactions };
   },
 
   'POST /api/lexware/book': async (_url, body) => bookVoucher(body),

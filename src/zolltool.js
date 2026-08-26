@@ -17,6 +17,9 @@ const norm = (u) => u.trim().replace(/\/+$/, '');
 export function loadZolltoolConfig(env = process.env) {
   return {
     url: env.ZOLLTOOL_URL ? norm(env.ZOLLTOOL_URL) : '',
+    // Preferred: a scoped, read-only API token (no password stored anywhere).
+    apiToken: env.ZOLLTOOL_API_TOKEN || '',
+    // Legacy fallback: account email + password login.
     email: env.ZOLLTOOL_EMAIL || '',
     password: env.ZOLLTOOL_PASSWORD || '',
   };
@@ -39,7 +42,7 @@ export class ZolltoolClient {
   }
 
   get configured() {
-    return !!(this.config.url && this.config.email && this.config.password);
+    return !!(this.config.url && (this.config.apiToken || (this.config.email && this.config.password)));
   }
 
   async #login() {
@@ -73,6 +76,14 @@ export class ZolltoolClient {
   }
 
   async #get(path) {
+    // API-token path: no login, nothing to refresh, read-only scope.
+    if (this.config.apiToken) {
+      const res = await fetch(`${this.config.url}${path}`, {
+        headers: { authorization: `Bearer ${this.config.apiToken}`, accept: 'application/json' },
+      });
+      if (!res.ok) throw new ZolltoolError(`GET ${path} failed (${res.status}): ${await res.text()}`, res.status);
+      return res.json();
+    }
     if (!this.#access) await this.#login();
     const doFetch = () =>
       fetch(`${this.config.url}${path}`, { headers: { authorization: `Bearer ${this.#access}`, accept: 'application/json' } });
@@ -85,8 +96,9 @@ export class ZolltoolClient {
     return res.json();
   }
 
-  /** Verify credentials + connectivity; returns the logged-in user. */
+  /** Verify credentials + connectivity. */
   connect() {
+    if (this.config.apiToken) return this.getEvents().then(() => ({ token: true }));
     return this.#login();
   }
 

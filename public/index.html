@@ -70,6 +70,7 @@ h1 span{color:var(--accent)}
 .badge-shopify{background:rgba(100,210,120,.14);color:#5db87a;border:1px solid rgba(100,210,120,.3)}
 .badge-online{background:rgba(100,160,240,.14);color:#60a0f0;border:1px solid rgba(100,160,240,.3)}
 .badge-wise{background:rgba(0,180,120,.14);color:#00b478;border:1px solid rgba(0,180,120,.3)}
+.badge-sumup{background:rgba(26,188,156,.14);color:#1abc9c;border:1px solid rgba(26,188,156,.32)}
 .badge-multi{background:rgba(160,100,240,.14);color:#c078f0;border:1px solid rgba(160,100,240,.28)}
 .device-badges{display:flex;gap:4px;flex-wrap:wrap}
 
@@ -221,6 +222,24 @@ h1 span{color:var(--accent)}
 .pull-sep{color:var(--muted)}
 .pull-date{background:var(--surface3);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:var(--font);font-size:.75rem;padding:5px 9px;color-scheme:dark}
 .pull-status{font-size:.72rem;color:var(--muted)}
+.import-panel{flex-direction:column;align-items:stretch;gap:12px}
+.import-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.import-label{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.09em;min-width:96px}
+.import-sources,.import-accounts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.src-chip{display:inline-flex;align-items:center;gap:6px;font-size:.74rem;color:var(--text);background:var(--surface3);border:1px solid var(--border2);border-radius:8px;padding:4px 10px;cursor:pointer}
+.src-chip input{accent-color:var(--accent)}
+.src-mock{font-size:.58rem;color:var(--orange);text-transform:uppercase;letter-spacing:.05em}
+.progress-overlay{position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;background:rgba(2,6,23,.72);backdrop-filter:blur(2px)}
+.progress-card{width:min(460px,92vw);background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:20px;box-shadow:0 18px 50px rgba(0,0,0,.5)}
+.progress-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.progress-title{font-size:.95rem;font-weight:700}
+.progress-track{height:8px;background:var(--surface3);border-radius:5px;overflow:hidden}
+.progress-bar{height:100%;width:0;background:var(--accent);border-radius:5px;transition:width .25s ease}
+.progress-bar.indeterminate{width:35%;animation:progslide 1.1s ease-in-out infinite}
+@keyframes progslide{0%{margin-left:-35%}100%{margin-left:100%}}
+.progress-step{font-size:.8rem;color:var(--text);margin-top:12px;min-height:1em}
+.progress-log{font-size:.7rem;color:var(--muted);margin-top:8px;max-height:120px;overflow-y:auto;line-height:1.6}
+.progress-log .ok{color:var(--green)}.progress-log .bad{color:var(--red)}
 
 /* ── No data ── */
 .no-data{text-align:center;padding:70px 24px;color:var(--muted);font-size:.83rem}
@@ -244,18 +263,27 @@ h1 span{color:var(--accent)}
   <input type="file" id="fileInput" accept=".xls,.xlsx,.csv">
 </div>
 
-<div id="shopifyPull" class="pull-panel" style="display:none">
-  <span class="pull-title">🛍 Pull Shopify orders</span>
-  <div class="pull-presets" aria-label="Shopify date range">
-    <button type="button" class="pull-preset active" data-range="last-month" onclick="setShopifyRange('last-month')">Last month</button>
-    <button type="button" class="pull-preset" data-range="last-3-months" onclick="setShopifyRange('last-3-months')">Last 3 months</button>
-    <button type="button" class="pull-preset" data-range="custom" onclick="setShopifyRange('custom')">Custom</button>
+<div id="importPanel" class="pull-panel import-panel" style="display:none">
+  <div class="import-row">
+    <span class="pull-title">⬇ Pull transactions</span>
+    <div id="importSources" class="import-sources"></div>
   </div>
-  <input type="date" id="shopFrom" class="pull-date" title="From (paid date)" onchange="setShopifyRange('custom', { keepDates: true })">
-  <span class="pull-sep">→</span>
-  <input type="date" id="shopTo" class="pull-date" title="To (paid date)" onchange="setShopifyRange('custom', { keepDates: true })">
-  <button class="pill auto-btn" onclick="pullShopify()">⬇ Pull</button>
-  <span id="shopPullStatus" class="pull-status"></span>
+  <div id="myposAccountsRow" class="import-row" style="display:none">
+    <span class="import-label">myPOS accounts</span>
+    <div id="myposAccounts" class="import-accounts"></div>
+  </div>
+  <div class="import-row">
+    <div class="pull-presets" aria-label="Date range">
+      <button type="button" class="pull-preset active" data-range="last-month" onclick="setImportRange('last-month')">Last month</button>
+      <button type="button" class="pull-preset" data-range="last-3-months" onclick="setImportRange('last-3-months')">Last 3 months</button>
+      <button type="button" class="pull-preset" data-range="custom" onclick="setImportRange('custom')">Custom</button>
+    </div>
+    <input type="date" id="importFrom" class="pull-date" title="From" onchange="setImportRange('custom', { keepDates: true })">
+    <span class="pull-sep">→</span>
+    <input type="date" id="importTo" class="pull-date" title="To" onchange="setImportRange('custom', { keepDates: true })">
+    <button class="pill auto-btn" onclick="pullAll()">⬇ Pull</button>
+    <span id="importStatus" class="pull-status"></span>
+  </div>
 </div>
 <div id="resetBar" style="display:none;text-align:right;margin-bottom:8px">
   <button onclick="resetAll()" style="background:none;border:1px solid var(--border2);border-radius:6px;color:var(--muted);font-family:var(--font);font-size:.7rem;padding:4px 12px;cursor:pointer" onmouseover="this.style.color='var(--red)';this.style.borderColor='var(--red)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border2)'">✕ Clear all data</button>
@@ -267,6 +295,18 @@ h1 span{color:var(--accent)}
   <div class="clusters-grid" id="clustersGrid"></div>
 </div>
 <div class="no-data" id="noData" style="display:none"><div class="big">∅</div><div>No clusters match the current filter.</div></div>
+
+<div id="progressOverlay" class="progress-overlay" style="display:none">
+  <div class="progress-card">
+    <div class="progress-head">
+      <span id="progressTitle" class="progress-title">Working…</span>
+      <button id="progressCancel" class="edt-btn edt-btn-cancel" onclick="cancelProgress()">Cancel</button>
+    </div>
+    <div class="progress-track"><div id="progressBar" class="progress-bar"></div></div>
+    <div id="progressStep" class="progress-step"></div>
+    <div id="progressLog" class="progress-log"></div>
+  </div>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -382,9 +422,14 @@ function parseTransactionExport(rows) {
     const terminal = String(col(r,'terminal_name')).trim();
     const tm = String(col(r,'description')).match(/TID\s+(\d+)/);
     if (tm && terminal) tidToName[tm[1]] = tidToName[tm[1]] || terminal;
+    // In the myPOS "account transactions" export, fees are booked as Payment
+    // rows with a NEGATIVE amount (each sale is paired with its ~3% fee), not as
+    // Type=Fee. Reclassify those so the Payments/Fees split is correct.
+    const rawType = String(col(r,'type')).trim();
+    const type = rawType === 'Payment' && amount < 0 ? 'Fee' : rawType;
     return {
       id: Math.random().toString(36).slice(2),
-      date, type: String(col(r,'type')).trim(), amount,
+      date, type, amount,
       currency: String(col(r,'currency')).trim() || 'EUR',
       terminal,
       card: String(col(r,'payment_from_card')).trim(),
@@ -1361,7 +1406,8 @@ function renderCluster(c) {
   const isEditing = editingUID===c.uid;
   const isShopifyCluster = c.txns.some(t=>t.source==='shopify');
   const isWiseCluster    = c.txns.some(t=>t.source==='wise');
-  const badge = c.isOnlineCluster?'badge-online':isWiseCluster?'badge-wise':isShopifyCluster?'badge-shopify':/go/i.test(c.device)?'badge-go2':c.device==='POS Carbon'?'badge-carbon-old':'badge-carbon';
+  const isSumupCluster   = c.txns.some(t=>t.source==='sumup');
+  const badge = c.isOnlineCluster?'badge-online':isWiseCluster?'badge-wise':isSumupCluster?'badge-sumup':isShopifyCluster?'badge-shopify':/go/i.test(c.device)?'badge-go2':c.device==='POS Carbon'?'badge-carbon-old':'badge-carbon';
   const dateRange = fmtDate(c.startDate)+(fmtDate(c.startDate)!==fmtDate(c.endDate)?' - '+fmtDate(c.endDate):'');
   const feeRate = c.totalPay>0?((c.totalFee/c.totalPay)*100).toFixed(2):'0.00';
   const txnId=`txn-${c.uid}`;
@@ -1369,6 +1415,7 @@ function renderCluster(c) {
   const allRows=[...c.txns].sort((a,b)=>a.date-b.date).map(t=>{
     const ip=t.type==='Payment';
     const isShop = t.source==='shopify';
+    const isSumup = t.source==='sumup';
     const detail = isShop ? (t.orderNum||t.ref||'-') : (t.card||'-');
     const detailLabel = isShop
       ? `<span style="font-size:.65rem;color:var(--muted)">${detail}</span>`
@@ -1376,8 +1423,9 @@ function renderCluster(c) {
     const manualTag = t.isManual ? '<span style="font-size:.58rem;margin-left:4px;color:#f0a040;border:1px solid rgba(240,160,64,.4);border-radius:3px;padding:1px 4px">manual</span>' : '';
     const onlineTag = t.isOnline ? '<span style="font-size:.58rem;margin-left:4px;color:#60a0f0;border:1px solid rgba(100,160,240,.4);border-radius:3px;padding:1px 4px">online</span>' : '';
     const wiseTag   = t.source==='wise' ? '<span style="font-size:.58rem;margin-left:4px;color:#00b478;border:1px solid rgba(0,180,120,.4);border-radius:3px;padding:1px 4px">Wise</span>' : '';
+    const sumupTag  = isSumup ? '<span style="font-size:.58rem;margin-left:4px;color:#1abc9c;border:1px solid rgba(26,188,156,.4);border-radius:3px;padding:1px 4px">SumUp</span>' : '';
     const rowStyle = t.isManual ? 'opacity:.55' : '';
-    return `<tr style="${rowStyle}"><td>${fmtDateTime(t.date)}</td><td><span class="type-chip ${ip?'type-pay':'type-fee'}">${t.type}</span>${isShop?'<span style="font-size:.58rem;margin-left:4px;color:#5db87a">Shopify</span>':''}${manualTag}${onlineTag}${wiseTag}</td><td class="${ip?'amount-pay':'amount-fee'}">${ip?'+':'-'}${fmtAmt(Math.abs(t.amount))}</td><td>${detailLabel}</td><td><button class="txn-del-btn" title="Remove transaction" onclick="event.stopPropagation();deleteTransaction('${c.uid}','${t.id}')">✕</button></td></tr>`;
+    return `<tr style="${rowStyle}"><td>${fmtDateTime(t.date)}</td><td><span class="type-chip ${ip?'type-pay':'type-fee'}">${t.type}</span>${isShop?'<span style="font-size:.58rem;margin-left:4px;color:#5db87a">Shopify</span>':''}${sumupTag}${manualTag}${onlineTag}${wiseTag}</td><td class="${ip?'amount-pay':'amount-fee'}">${ip?'+':'-'}${fmtAmt(Math.abs(t.amount))}</td><td>${detailLabel}</td><td><button class="txn-del-btn" title="Remove transaction" onclick="event.stopPropagation();deleteTransaction('${c.uid}','${t.id}')">✕</button></td></tr>`;
   }).join('');
 
   // split selector rows (all txns, user picks which go to new cluster)
@@ -1406,7 +1454,7 @@ function renderCluster(c) {
     : isWiseCluster
     ? `<span class="device-badge badge-wise">💸 Wise</span>`
     : deviceList.map(d => {
-        const bc = /go/i.test(d)?'badge-go2':d==='POS Carbon'?'badge-carbon-old':isShopifyCluster?'badge-shopify':'badge-carbon';
+        const bc = /go/i.test(d)?'badge-go2':d==='POS Carbon'?'badge-carbon-old':isShopifyCluster?'badge-shopify':isSumupCluster?'badge-sumup':'badge-carbon';
         return `<span class="device-badge ${bc}">${d}</span>`;
       }).join('');
 
@@ -1601,10 +1649,7 @@ async function loadBridge() {
     const st = await fetch('/api/status').then(r => r.json());
     window.bridge = st;
     renderBridgeStatus(st);
-    if (st.shopify) {
-      document.getElementById('shopifyPull').style.display = 'flex';
-      setShopifyRange(window.shopifyRangeMode || 'last-month');
-    }
+    buildImportPanel(st);
     if (st.zolltool && st.zolltool.configured) {
       const d = await fetch('/api/zolltool/events').then(r => r.json());
       window.zollEvents = (d.events || []).filter(e => e.dateStart && e.dateEnd);
@@ -1622,6 +1667,7 @@ function renderBridgeStatus(st) {
     `${dot(st.zolltool.configured)}ZollTool` +
     `&nbsp;&nbsp;${dot(st.mypos.mode === 'live')}myPOS ${st.mypos.mode}` +
     `&nbsp;&nbsp;${dot(st.shopify && st.shopify.mode === 'live' && st.shopify.ready !== false)}Shopify ${st.shopify ? st.shopify.mode : '—'}` +
+    `&nbsp;&nbsp;${dot(st.sumup && st.sumup.mode === 'live' && st.sumup.ready !== false)}SumUp ${st.sumup ? st.sumup.mode : '—'}` +
     `&nbsp;&nbsp;${dot(st.lexware.configured)}Lexware`;
 }
 
@@ -1644,38 +1690,145 @@ function shopifyRangeDates(mode) {
     to: dateInputValue(new Date(now.getFullYear(), now.getMonth(), 0)),
   };
 }
-function setShopifyRange(mode, opts = {}) {
-  window.shopifyRangeMode = mode;
-  document.querySelectorAll('.pull-preset').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.range === mode);
-  });
-  if (!opts.keepDates && mode !== 'custom') {
-    const range = shopifyRangeDates(mode);
-    document.getElementById('shopFrom').value = range.from;
-    document.getElementById('shopTo').value = range.to;
+const rid = () => Math.random().toString(36).slice(2);
+
+// Build the unified importer from the backend status: a checkbox per configured
+// source, a myPOS account multi-select, one date range, one Pull button.
+function buildImportPanel(st) {
+  const panel = document.getElementById('importPanel');
+  const srcs = [];
+  if (st.mypos) srcs.push(['mypos', 'myPOS', st.mypos.mode]);
+  if (st.shopify) srcs.push(['shopify', 'Shopify', st.shopify.mode]);
+  if (st.sumup) srcs.push(['sumup', 'SumUp', st.sumup.mode]);
+  if (!srcs.length) { panel.style.display = 'none'; return; }
+  panel.style.display = 'flex';
+  document.getElementById('importSources').innerHTML = srcs.map(([id, name, mode]) =>
+    `<label class="src-chip"><input type="checkbox" data-src="${id}" checked onchange="onSourceToggle()"> ${name}` +
+    `${mode === 'mock' ? ' <span class="src-mock">mock</span>' : ''}</label>`).join('');
+  setImportRange(window.importRangeMode || 'last-month');
+  onSourceToggle();
+}
+function srcChecked(id) {
+  const el = document.querySelector(`#importSources input[data-src="${id}"]`);
+  return !!(el && el.checked);
+}
+async function onSourceToggle() {
+  const row = document.getElementById('myposAccountsRow');
+  if (!srcChecked('mypos')) { row.style.display = 'none'; return; }
+  row.style.display = 'flex';
+  if (!window.myposAccounts) {
+    const box = document.getElementById('myposAccounts');
+    box.textContent = 'loading accounts…';
+    try { window.myposAccounts = (await fetch('/api/mypos/accounts').then(r => r.json())).accounts || []; }
+    catch (e) { window.myposAccounts = []; }
+    renderMyposAccounts();
   }
-  const isCustom = mode === 'custom';
-  document.getElementById('shopFrom').readOnly = !isCustom;
-  document.getElementById('shopTo').readOnly = !isCustom;
+}
+function renderMyposAccounts() {
+  const box = document.getElementById('myposAccounts');
+  const a = window.myposAccounts || [];
+  box.innerHTML = a.length
+    ? a.map(x => `<label class="src-chip"><input type="checkbox" value="${x.account_number}" checked> ${x.currency} · ${x.account_number}${x.name ? ' <span class="src-mock" style="text-transform:none">' + x.name + '</span>' : ''}</label>`).join('')
+    : '<span class="pull-status">no accounts</span>';
+}
+function setImportRange(mode, opts = {}) {
+  window.importRangeMode = mode;
+  document.querySelectorAll('#importPanel [data-range]').forEach(b => b.classList.toggle('active', b.dataset.range === mode));
+  if (!opts.keepDates && mode !== 'custom') {
+    const r = shopifyRangeDates(mode);
+    document.getElementById('importFrom').value = r.from;
+    document.getElementById('importTo').value = r.to;
+  }
+  const custom = mode === 'custom';
+  document.getElementById('importFrom').readOnly = !custom;
+  document.getElementById('importTo').readOnly = !custom;
 }
 
-// Pull Shopify orders for a date range and feed them through the clustering
-// engine (online → monthly online cluster; POS locations → device clusters).
-async function pullShopify() {
-  const from = document.getElementById('shopFrom').value;
-  const to = document.getElementById('shopTo').value;
-  const st = document.getElementById('shopPullStatus');
+// ── Progress overlay (shared by Pull and Book) ──────────────────────────────
+let _progress = null;
+function startProgress(title) {
+  _progress = { cancelled: false, controller: new AbortController() };
+  document.getElementById('progressTitle').textContent = title;
+  document.getElementById('progressStep').textContent = '';
+  document.getElementById('progressLog').innerHTML = '';
+  const btn = document.getElementById('progressCancel');
+  btn.textContent = 'Cancel'; btn.onclick = cancelProgress; btn.style.display = '';
+  setProgress(0, true);
+  document.getElementById('progressOverlay').style.display = 'flex';
+  return _progress;
+}
+function setProgress(pct, indeterminate) {
+  const bar = document.getElementById('progressBar');
+  if (indeterminate) { bar.classList.add('indeterminate'); bar.style.width = ''; }
+  else { bar.classList.remove('indeterminate'); bar.style.width = Math.max(0, Math.min(100, pct)) + '%'; }
+}
+function progressStep(t) { document.getElementById('progressStep').textContent = t; }
+function progressLog(t, cls) {
+  const el = document.getElementById('progressLog');
+  const line = document.createElement('div'); if (cls) line.className = cls; line.textContent = t;
+  el.appendChild(line); el.scrollTop = el.scrollHeight;
+}
+function endProgress() { document.getElementById('progressOverlay').style.display = 'none'; _progress = null; }
+function cancelProgress() { if (_progress) { _progress.cancelled = true; _progress.controller.abort(); progressStep('Cancelling…'); } }
+const progressCancelled = () => _progress && _progress.cancelled;
+function finishProgress(text) {
+  setProgress(100, false); progressStep(text);
+  const btn = document.getElementById('progressCancel');
+  btn.textContent = 'Close'; btn.onclick = endProgress;
+}
+
+// One date range → pull every selected source and feed the clustering engine.
+async function pullAll() {
+  const from = document.getElementById('importFrom').value;
+  const to = document.getElementById('importTo').value;
+  const st = document.getElementById('importStatus');
   if (!from || !to) { st.textContent = 'Pick a from and to date.'; return; }
-  if (from > to) { st.textContent = 'From date must be before the to date.'; return; }
-  st.textContent = 'Pulling…';
+  if (from > to) { st.textContent = 'From must be before To.'; return; }
+  const wanted = ['mypos', 'shopify', 'sumup'].filter(srcChecked);
+  if (!wanted.length) { st.textContent = 'Select at least one source.'; return; }
+
+  const p = startProgress('Pulling transactions');
+  const opts = { signal: p.controller.signal };
+  const all = [], notes = [], errs = [];
+  const tag = (n, mode) => `${n}${mode === 'mock' ? ' (mock)' : ''}`;
+  let done = 0;
+  const fetchSource = async (label, url, key, mapFn) => {
+    if (progressCancelled()) return;
+    progressStep(`Pulling ${label}…`);
+    try {
+      const d = await fetch(url, opts).then(r => r.json());
+      if (d.error) throw new Error(d.error);
+      const rows = d[key] || [];
+      for (const o of rows) all.push(mapFn(o));
+      notes.push(`${rows.length} ${tag(label, d.mode)}`);
+      progressLog(`${label}: ${rows.length}${d.mode === 'mock' ? ' (mock)' : ''}`, 'ok');
+    } catch (e) {
+      if (e.name === 'AbortError') progressLog(`${label}: cancelled`);
+      else { errs.push(`${label}: ${e.message}`); progressLog(`${label}: ${e.message}`, 'bad'); }
+    }
+    setProgress((++done / wanted.length) * 100, false);
+  };
+
   try {
-    const d = await fetch(`/api/shopify/orders?from=${from}&to=${to}`).then(r => r.json());
-    if (d.error) throw new Error(d.error);
-    const txns = (d.orders || []).map(o => ({ ...o, id: Math.random().toString(36).slice(2), date: new Date(o.date) }));
-    if (!txns.length) { st.textContent = 'No paid orders in that period.'; return; }
-    mergeClusters(txns);
-    st.textContent = `Imported ${txns.length} order(s)${d.mode === 'mock' ? ' — mock data' : ''}.`;
-  } catch (e) { st.textContent = 'Failed: ' + e.message; }
+    if (srcChecked('mypos')) {
+      const accts = [...document.querySelectorAll('#myposAccounts input:checked')].map(e => e.value);
+      const q = new URLSearchParams({ from, to });
+      if (accts.length) q.set('accounts', accts.join(','));
+      await fetchSource('myPOS', '/api/mypos/transactions?' + q, 'transactions',
+        o => ({ id: rid(), date: new Date(o.dateTime), type: o.type, amount: o.amount, currency: o.currency, terminal: o.terminal || 'myPOS', card: o.card || '', ref: o.reference, desc: o.desc, source: 'mypos', isOnline: false }));
+    }
+    if (srcChecked('shopify'))
+      await fetchSource('Shopify', `/api/shopify/orders?from=${from}&to=${to}`, 'orders', o => ({ ...o, id: rid(), date: new Date(o.date) }));
+    if (srcChecked('sumup'))
+      await fetchSource('SumUp', `/api/sumup/transactions?from=${from}&to=${to}`, 'transactions', o => ({ ...o, id: rid(), date: new Date(o.date) }));
+
+    if (all.length && !progressCancelled()) { progressStep('Clustering…'); mergeClusters(all); }
+    st.textContent = (progressCancelled() ? 'Pull cancelled. ' : '')
+      + (all.length ? `Imported ${all.length} row(s) — ${notes.join(', ')}.` : 'No transactions found.')
+      + (errs.length ? `  ⚠ ${errs.join('; ')}` : '');
+    finishProgress(progressCancelled() ? 'Cancelled' : `Imported ${all.length} row(s)`);
+    if (!errs.length && !progressCancelled()) setTimeout(() => { if (_progress) endProgress(); }, 700);
+  } catch (e) { st.textContent = 'Failed: ' + e.message; endProgress(); }
 }
 function isoDay(d) { return new Date(d).toISOString().slice(0, 10); }
 
@@ -1711,6 +1864,20 @@ async function verifyCluster(uid) {
   } catch (e) { c.myposVerify = { error: e.message }; }
   render();
 }
+// Pull the event's cash revenue from ZollTool onto the cluster (added to the
+// report + booking total, exactly like a manual cash entry).
+async function loadClusterCash(uid) {
+  const c = allClusters.find(x => x.uid === uid);
+  if (!c || !c.matchedEventId) return;
+  try {
+    const d = await fetch('/api/zolltool/cash?eventId=' + encodeURIComponent(c.matchedEventId)).then(r => r.json());
+    if (d.error) throw new Error(d.error);
+    c.cashAmount = d.cash || 0;
+    c.cashNote = 'ZollTool cash';
+    c.cashLoaded = true;
+    render();
+  } catch (e) { alert('Cash from ZollTool: ' + e.message); }
+}
 function accountingControls(c) {
   if (!window.bridge) return '';
   const events = window.zollEvents || [];
@@ -1733,14 +1900,18 @@ function accountingControls(c) {
     <div class="acct-line">
       <button class="edt-btn" onclick="verifyCluster('${c.uid}')">Verify vs myPOS</button>
       ${verifyBadge}
+      ${c.matchedEventId && window.bridge.zolltool && window.bridge.zolltool.configured
+        ? `<button class="edt-btn" onclick="loadClusterCash('${c.uid}')">⬇ Cash from ZollTool</button>` +
+          (c.cashLoaded ? `<span class="acct-badge good" title="Cash loaded from ZollTool">💶 ${fmtAmt(c.cashAmount || 0)}</span>` : '')
+        : ''}
       ${canBook ? (c.bookedVoucherId
         ? `<a class="acct-badge good" href="https://app.lexware.de/permalink/vouchers/view/${c.bookedVoucherId}" target="_blank" style="text-decoration:none">Booked ✓ — view</a>`
         : `<button class="edt-btn edt-btn-book" onclick="bookCluster('${c.uid}')">⇪ Book revenue to Lexware</button>`) : ''}
     </div>
   </div>`;
 }
-async function postBook(payload) {
-  const r = await fetch('/api/lexware/book', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+async function postBook(payload, signal) {
+  const r = await fetch('/api/lexware/book', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload), signal });
   const d = await r.json();
   if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
   return d;
@@ -1796,15 +1967,26 @@ async function bookAllReady() {
   if (!ready.length) { alert('No ready, unbooked clusters to book.'); return; }
   const total = ready.reduce((s, c) => s + c.totalPay + (c.cashAmount || 0), 0);
   if (!confirm(`Book ${ready.length} ready cluster(s) totalling ${fmtAmt(total)} to Lexware?\nThis creates ${ready.length} separate voucher(s).`)) return;
+  const p = startProgress('Booking to Lexware');
   let ok = 0; const fails = [];
-  for (const c of ready) {
+  for (let i = 0; i < ready.length; i++) {
+    if (progressCancelled()) break;
+    const c = ready[i];
+    progressStep(`Booking ${i + 1}/${ready.length}: ${c.clusterID}${c.customName ? ' · ' + c.customName : ''}`);
+    setProgress((i / ready.length) * 100, false);
     const payload = buildRevenuePayload(c);
-    if (!payload) { fails.push(`${c.clusterID}: needs a name`); continue; }
-    try { const res = await postBook({ ...payload, dryRun: false }); c.bookedVoucherId = res.voucherId; ok++; }
-    catch (e) { fails.push(`${c.clusterID}: ${e.message}`); }
+    if (!payload) { fails.push(`${c.clusterID}: needs a name`); progressLog(`${c.clusterID}: needs a name`, 'bad'); continue; }
+    try {
+      const res = await postBook({ ...payload, dryRun: false }, p.controller.signal);
+      c.bookedVoucherId = res.voucherId; ok++;
+      progressLog(`${c.clusterID}: booked ✓`, 'ok');
+    } catch (e) {
+      if (e.name === 'AbortError') { progressLog(`${c.clusterID}: cancelled`); break; }
+      fails.push(`${c.clusterID}: ${e.message}`); progressLog(`${c.clusterID}: ${e.message}`, 'bad');
+    }
   }
   render();
-  alert(`Booked ${ok}/${ready.length} ✓` + (fails.length ? `\n\nSkipped/failed:\n${fails.join('\n')}` : ''));
+  finishProgress(`Booked ${ok}/${ready.length}${progressCancelled() ? ' (cancelled)' : ''}` + (fails.length ? ` · ${fails.length} failed` : ' ✓'));
 }
 async function bookMonthFees(key) {
   const clusters = allClusters.filter(c => getMonthKey(c.startDate) === key);
