@@ -12,7 +12,8 @@ import { loadMyposConfig, MyposClient } from './mypos.js';
 import { loadShopifyConfig, ShopifyClient } from './shopify.js';
 import { loadSumupConfig, SumupClient } from './sumup.js';
 import { ZolltoolClient, loadZolltoolConfig } from './zolltool.js';
-import { getTenantConfig } from './store.js';
+import { getTenantConfig, groupEnabled } from './store.js';
+import { GROUP_KEYS, GROUP_IDS } from './config-schema.js';
 
 const cache = new Map(); // userId → { zoll, mypos, shopify, sumup, lexware }
 
@@ -28,7 +29,17 @@ export function getTenantClients(userId) {
   return clients;
 }
 
-function buildClients(userId, env) {
+/** Env with the keys of any disabled group removed, so it's treated as unset. */
+function withEnabledOnly(cfg) {
+  const env = { ...cfg };
+  for (const group of GROUP_IDS) {
+    if (!groupEnabled(cfg, group)) for (const key of GROUP_KEYS[group]) delete env[key];
+  }
+  return env;
+}
+
+function buildClients(userId, cfg) {
+  const env = withEnabledOnly(cfg);
   const myposCfg = loadMyposConfig(env);
   myposCfg.cacheNs = userId; // keep each tenant's myPOS file cache separate
   return {

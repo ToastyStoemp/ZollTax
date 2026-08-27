@@ -8,7 +8,7 @@ import { LexwareClient, LexwareApiError, resolveCategoryId } from './lexware.js'
 import { buildRevenueVoucher } from './voucher.js';
 import { buildFeeVoucher } from './expense.js';
 import { summarize } from './mypos.js';
-import { CONFIG_GROUPS, redactConfig } from './config-schema.js';
+import { CONFIG_GROUPS, GROUP_IDS, redactConfig } from './config-schema.js';
 import { masterKeyConfigured, generateMasterKeyHex, resetMasterKeyCache, encryptJson, decryptJson } from './crypto.js';
 import {
   authenticate,
@@ -21,6 +21,7 @@ import {
   patchUser,
   has2fa,
   getTenantConfig,
+  groupEnabled,
   listUsers,
   saveTenantConfig,
   setPassword,
@@ -165,17 +166,21 @@ const routes = {
     lexware: { configured: !!clients.lexware.apiKey, feeCategory: !!clients.lexware.feeCategory },
   }),
 
-  'GET /api/config': async ({ user }) => ({
-    groups: CONFIG_GROUPS,
-    values: redactConfig(getTenantConfig(user.id)),
-  }),
+  'GET /api/config': async ({ user }) => {
+    const cfg = getTenantConfig(user.id);
+    return { groups: CONFIG_GROUPS, values: redactConfig(cfg), enabled: enabledMap(cfg) };
+  },
 
   'PUT /api/config': async ({ user, body }) => {
     if (!masterKeyConfigured()) throw new HttpError(500, 'Server has no encryption key configured (ZOLLTAX_MASTER_KEY).');
-    saveTenantConfig(user.id, { set: body.set || {}, clear: body.clear || [] });
+    saveTenantConfig(user.id, { set: body.set || {}, clear: body.clear || [], enabled: body.enabled });
     invalidateTenant(user.id);
-    return { ok: true, values: redactConfig(getTenantConfig(user.id)) };
+    const cfg = getTenantConfig(user.id);
+    return { ok: true, values: redactConfig(cfg), enabled: enabledMap(cfg) };
   },
+
+  // Live connectivity check for one integration, using the saved config.
+  'POST /api/config/test': async ({ body, clients }) => testConnection(clients, String(body.group || '')),
 
   'GET /api/zolltool/events': async ({ clients }) => ({ events: await clients.zoll.getEvents() }),
 
@@ -343,6 +348,50 @@ async function sessionSubroute(method, path, ctx) {
     return { ok: true };
   }
   return undefined;
+}
+
+// ── Config: per-group enable + connectivity test ─────────────────────────────
+
+const enabledMap = (cfg) => Object.fromEntries(GROUP_IDS.map((id) => [id, groupEnabled(cfg, id)]));
+
+/** Live check for one integration using the tenant's saved config. */
+async function testConnection(clients, group) {
+  try {
+    switch (group) {
+      case 'lexware': {
+        if (!clients.lexware.apiKey) return { ok: false, detail: 'No API key set.' };
+        const p = await new LexwareClient({ apiKey: clients.lexware.apiKey, apiUrl: clients.lexware.apiUrl }).ping();
+        return { ok: true, detail: `Connected${p?.companyName ? ` — ${p.companyName}` : ''}.` };
+      }
+      case 'zolltool': {
+        if (!clients.zoll.configured) return { ok: false, detail: 'Not configured (server URL + token or login).' };
+        await clients.zoll.connect();
+        return { ok: true, detail: 'ZollTool read API reachable.' };
+      }
+      case 'mypos': {
+        if (clients.mypos.mode !== 'live') return { ok: false, detail: 'Missing myPOS credentials.' };
+        const accounts = await clients.mypos.listAccounts();
+        return { ok: true, detail: `Authenticated — ${accounts.length} account(s).` };
+      }
+      case 'shopify': {
+        const st = await clients.shopify.status({ warmToken: true });
+        if (st.mode !== 'live') return { ok: false, detail: 'Missing Shopify credentials.' };
+        if (st.ready === false) return { ok: false, detail: 'Token exchange failed — check the client ID/secret.' };
+        return { ok: true, detail: `Connected to ${st.shop || 'Shopify'}.` };
+      }
+      case 'sumup': {
+        if (clients.sumup.mode !== 'live') return { ok: false, detail: 'Missing SumUp credentials.' };
+        const to = new Date().toISOString().slice(0, 10);
+        const from = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+        await clients.sumup.listTransactions({ from, to });
+        return { ok: true, detail: 'SumUp API reachable.' };
+      }
+      default:
+        return { ok: false, detail: 'Unknown integration.' };
+    }
+  } catch (e) {
+    return { ok: false, detail: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 // ── Lexware booking (per-tenant credentials) ─────────────────────────────────

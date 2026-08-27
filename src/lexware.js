@@ -115,6 +115,11 @@ export class LexwareClient {
     return this.#request('GET', `/vouchers/${id}`);
   }
 
+  /** Lightweight auth/connectivity check — the org profile (used by "Test"). */
+  ping() {
+    return this.#request('GET', '/profile');
+  }
+
   /**
    * Attach a file (the PDF) to an existing voucher.
    * @param {string} voucherId

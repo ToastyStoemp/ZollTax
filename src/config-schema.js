@@ -78,6 +78,12 @@ export const CONFIG_GROUPS = [
 /** Flat list of every valid config key. */
 export const CONFIG_KEYS = CONFIG_GROUPS.flatMap((g) => g.fields.map((f) => f.key));
 
+/** group id → its env keys, e.g. { lexware: ['LEXWARE_API_KEY', …], … }. */
+export const GROUP_KEYS = Object.fromEntries(CONFIG_GROUPS.map((g) => [g.id, g.fields.map((f) => f.key)]));
+
+/** All group ids in order. */
+export const GROUP_IDS = CONFIG_GROUPS.map((g) => g.id);
+
 /** Set of keys that must never be echoed back to the browser. */
 export const SECRET_KEYS = new Set(
   CONFIG_GROUPS.flatMap((g) => g.fields.filter((f) => f.secret).map((f) => f.key)),

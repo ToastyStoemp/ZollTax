@@ -169,7 +169,7 @@ export function getTenantConfig(userId) {
  * Merge changes into a tenant's config. `set` writes non-empty values (only
  * whitelisted keys); `clear` removes keys. Returns the new decrypted config.
  */
-export function saveTenantConfig(userId, { set = {}, clear = [] } = {}) {
+export function saveTenantConfig(userId, { set = {}, clear = [], enabled } = {}) {
   const cfg = getTenantConfig(userId);
   for (const key of Object.keys(set)) {
     if (!CONFIG_KEYS.includes(key)) continue;
@@ -180,6 +180,16 @@ export function saveTenantConfig(userId, { set = {}, clear = [] } = {}) {
   for (const key of clear) {
     if (CONFIG_KEYS.includes(key)) delete cfg[key];
   }
+  // Per-group enable flags (group disabled → its integration is ignored).
+  if (enabled && typeof enabled === 'object') {
+    cfg.__enabled = { ...(cfg.__enabled || {}) };
+    for (const [group, on] of Object.entries(enabled)) cfg.__enabled[group] = !!on;
+  }
   writeAtomic(configFile(userId), encryptJson(cfg));
   return cfg;
+}
+
+/** A group is on unless explicitly disabled. */
+export function groupEnabled(cfg, groupId) {
+  return cfg?.__enabled?.[groupId] !== false;
 }

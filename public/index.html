@@ -264,9 +264,24 @@ h1 span{color:var(--accent)}
 .empty{color:var(--muted);font-size:.85rem;padding:6px 0}
 .field .saved-tag{font-size:.62rem;color:var(--green);text-transform:uppercase;letter-spacing:.06em;margin-left:8px}
 .field .clear-link{font-size:.62rem;color:var(--red);cursor:pointer;margin-left:8px;text-transform:uppercase;letter-spacing:.06em}
-.cfg-group{border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px}
+.cfg-group{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px}
 .cfg-group>h3{font-size:.9rem;font-weight:700;margin-bottom:3px}
 .cfg-group>.ghint{font-size:.7rem;color:var(--muted);margin-bottom:12px}
+/* ── Settings view (full page) ── */
+.settings-view{position:fixed;inset:0;z-index:110;background:var(--bg);overflow-y:auto;padding:28px 22px}
+.settings-inner{max-width:720px;margin:0 auto}
+.settings-head{display:flex;align-items:center;gap:14px;margin-bottom:8px}
+.settings-head h2{font-size:1.5rem;font-weight:800;letter-spacing:-.02em}
+.settings-savebar{position:sticky;bottom:0;background:var(--bg);padding:14px 0 4px;margin-top:8px;display:flex;gap:10px;align-items:center;border-top:1px solid var(--border)}
+.cfg-group-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:3px}
+.cfg-group-head h3{font-size:.95rem;font-weight:700;margin:0}
+.switch{display:inline-flex;align-items:center;gap:7px;font-size:.72rem;color:var(--muted);cursor:pointer;white-space:nowrap}
+.switch input{accent-color:var(--accent)}
+.cfg-group.disabled{opacity:.6}
+.cfg-group.disabled .cfg-fields,.cfg-group.disabled .cfg-actions{display:none}
+.cfg-actions{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+.test-result{font-size:.74rem}
+.test-result.ok{color:var(--green)}.test-result.bad{color:var(--red)}.test-result.pending{color:var(--muted)}
 .btn-primary{background:#059669;color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:.82rem;font-weight:600;padding:10px 18px;cursor:pointer;transition:background .15s}
 .btn-primary:hover{background:#10b981}.btn-primary:disabled{opacity:.45;cursor:not-allowed}
 .btn-ghost{background:var(--surface2);color:var(--text);border:none;border-radius:8px;font-family:var(--font);font-size:.82rem;padding:10px 16px;cursor:pointer;transition:background .15s}
@@ -390,15 +405,15 @@ h1 span{color:var(--accent)}
 </div>
 
 <!-- ── Settings / config ── -->
-<div id="configOverlay" class="overlay" style="display:none">
-  <div class="modal-card">
-    <div class="modal-head">
+<div id="configOverlay" class="settings-view" style="display:none">
+  <div class="settings-inner">
+    <div class="settings-head">
+      <button class="icon-btn" onclick="closeConfig()">← Back</button>
       <h2>Settings</h2>
-      <button class="modal-close" onclick="closeConfig()">×</button>
     </div>
-    <p class="modal-sub">API keys for your integrations. Stored encrypted on the server — secrets are never sent back to the browser.</p>
+    <p class="modal-sub">Your integrations. Turn a category off to ignore it entirely; use <strong>Test connection</strong> to check the entered credentials. Secrets are stored encrypted and never sent back to the browser.</p>
     <div id="configGroups"></div>
-    <div style="display:flex;gap:10px;align-items:center;margin-top:6px">
+    <div class="settings-savebar">
       <button id="configSaveBtn" class="btn-primary" onclick="saveConfig()">Save changes</button>
       <button class="btn-ghost" onclick="closeConfig()">Close</button>
       <span id="configMsg" class="form-msg" style="margin-top:0"></span>
@@ -2566,17 +2581,38 @@ async function submitSetup(e) {
 let configSchema = null;
 async function openConfig() {
   const overlay = document.getElementById('configOverlay');
-  overlay.style.display = 'flex';
+  overlay.style.display = 'block';
+  overlay.scrollTop = 0;
   document.getElementById('configMsg').textContent = '';
   const host = document.getElementById('configGroups');
   host.innerHTML = '<p style="color:var(--muted);font-size:.8rem">Loading…</p>';
   try {
     const d = await fetch('/api/config').then(r => r.json());
-    configSchema = d.groups; window.configValues = d.values; window.cfgValues = d.values;
-    renderConfig(d.groups, d.values);
+    configSchema = d.groups; window.configValues = d.values; window.cfgValues = d.values; window.cfgEnabled = d.enabled || {};
+    renderConfig(d.groups, d.values, window.cfgEnabled);
   } catch { host.innerHTML = '<p class="form-msg bad">Could not load settings.</p>'; }
 }
 function closeConfig() { document.getElementById('configOverlay').style.display = 'none'; }
+function onGroupToggle(id, cb) {
+  const sec = document.querySelector('.cfg-group[data-group="' + id + '"]');
+  if (sec) sec.classList.toggle('disabled', !cb.checked);
+}
+async function testGroup(id) {
+  const res = document.getElementById('test-' + id);
+  res.className = 'test-result pending'; res.textContent = 'Testing…';
+  if (!(await saveConfig(true))) { res.className = 'test-result bad'; res.textContent = '✗ Could not save first'; return; }
+  try {
+    const d = await fetch('/api/config/test', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ group: id }),
+    }).then(r => r.json());
+    const el = document.getElementById('test-' + id);
+    el.className = 'test-result ' + (d.ok ? 'ok' : 'bad');
+    el.textContent = (d.ok ? '✓ ' : '✗ ') + (d.detail || (d.ok ? 'Connected' : 'Failed'));
+  } catch {
+    const el = document.getElementById('test-' + id);
+    if (el) { el.className = 'test-result bad'; el.textContent = '✗ Server unreachable'; }
+  }
+}
 
 // Sample data used to preview title/description templates live in Settings.
 const SAMPLE_VARS = {
@@ -2584,9 +2620,11 @@ const SAMPLE_VARS = {
   event_start: '2026-07-02', event_end: '2026-07-05', month: 'August 2026',
   month_num: '2026-08', year: '2026', vat_rate: '0%', cluster_id: 'PN_2026_08_001', total: '€1,234.56', currency: 'EUR',
 };
-function renderConfig(groups, values) {
+function renderConfig(groups, values, enabled) {
+  enabled = enabled || {};
   const host = document.getElementById('configGroups');
   host.innerHTML = groups.map(g => {
+    const on = enabled[g.id] !== false;
     const fields = g.fields.map(f => {
       const isSecret = !!f.secret;
       const isTemplate = !!f.template;
@@ -2600,7 +2638,14 @@ function renderConfig(groups, values) {
       return `<div class="field"><label>${f.label}${savedTag}</label>` +
         `<input data-key="${f.key}" data-secret="${isSecret ? 1 : 0}"${tplAttrs} type="${isSecret ? 'password' : 'text'}" value="${String(val).replace(/"/g,'&quot;')}"${ph} autocomplete="off">${hint}${preview}</div>`;
     }).join('');
-    return `<div class="cfg-group"><h3>${g.label}</h3><div class="ghint">${g.hint || ''}</div>${fields}</div>`;
+    return `<div class="cfg-group ${on ? '' : 'disabled'}" data-group="${g.id}">` +
+      `<div class="cfg-group-head"><h3>${g.label}</h3>` +
+      `<label class="switch"><input type="checkbox" data-group-enable="${g.id}" ${on ? 'checked' : ''} onchange="onGroupToggle('${g.id}', this)"> Enabled</label></div>` +
+      `<div class="ghint">${g.hint || ''}</div>` +
+      `<div class="cfg-fields">${fields}` +
+      `<div class="cfg-actions"><button class="btn-ghost" style="padding:7px 14px;font-size:.75rem" onclick="testGroup('${g.id}')">Test connection</button>` +
+      `<span class="test-result" id="test-${g.id}"></span></div></div>` +
+      `</div>`;
   }).join('');
   document.querySelectorAll('#configGroups input[data-template="1"]').forEach(updateTplPreview);
 }
@@ -2616,10 +2661,11 @@ function toggleClear(el) {
   el.textContent = el.dataset.on === '1' ? 'will clear' : 'clear';
 }
 
-async function saveConfig() {
+// `silent` (used by Test) persists without re-rendering the form or showing a message.
+async function saveConfig(silent) {
   const btn = document.getElementById('configSaveBtn');
   const msg = document.getElementById('configMsg');
-  const set = {}, clear = [];
+  const set = {}, clear = [], enabled = {};
   document.querySelectorAll('#configGroups input[data-key]').forEach(inp => {
     const key = inp.dataset.key, secret = inp.dataset.secret === '1', v = inp.value.trim();
     if (secret) { if (v) set[key] = v; }          // blank secret = leave unchanged
@@ -2630,21 +2676,25 @@ async function saveConfig() {
     if (!inp.value.trim()) { clear.push(inp.dataset.key); delete set[inp.dataset.key]; }
   });
   document.querySelectorAll('#configGroups .clear-link[data-on="1"]').forEach(el => clear.push(el.dataset.clear));
+  document.querySelectorAll('#configGroups input[data-group-enable]').forEach(cb => { enabled[cb.dataset.groupEnable] = cb.checked; });
 
-  btn.disabled = true; msg.className = 'form-msg'; msg.textContent = 'Saving…';
+  if (!silent) { btn.disabled = true; msg.className = 'form-msg'; msg.textContent = 'Saving…'; }
   try {
     const res = await fetch('/api/config', {
       method: 'PUT', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ set, clear }),
+      body: JSON.stringify({ set, clear, enabled }),
     });
     const d = await res.json();
-    if (!res.ok) { msg.className = 'form-msg bad'; msg.textContent = d.error || 'Save failed'; return; }
-    window.configValues = d.values; window.cfgValues = d.values;
-    renderConfig(configSchema, d.values);
-    msg.className = 'form-msg ok'; msg.textContent = 'Saved.';
+    if (!res.ok) { if (!silent) { msg.className = 'form-msg bad'; msg.textContent = d.error || 'Save failed'; } return false; }
+    window.configValues = d.values; window.cfgValues = d.values; window.cfgEnabled = d.enabled || enabled;
     loadBridge(); // refresh integration status dots
-  } catch { msg.className = 'form-msg bad'; msg.textContent = 'Server unreachable.'; }
-  finally { btn.disabled = false; }
+    if (!silent) {
+      renderConfig(configSchema, d.values, window.cfgEnabled);
+      msg.className = 'form-msg ok'; msg.textContent = 'Saved.';
+    }
+    return true;
+  } catch { if (!silent) { msg.className = 'form-msg bad'; msg.textContent = 'Server unreachable.'; } return false; }
+  finally { if (!silent) btn.disabled = false; }
 }
 
 // ── Admin: client accounts ──
