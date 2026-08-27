@@ -158,7 +158,8 @@ async function startSession(req, res, userId) {
 // ── Authenticated API routes: (ctx) → JSON. ctx = { url, body, user, clients } ─
 
 const routes = {
-  'GET /api/status': async ({ clients }) => ({
+  'GET /api/status': async ({ user, clients }) => ({
+    enabled: enabledMap(getTenantConfig(user.id)),
     zolltool: { configured: clients.zoll.configured, url: clients.zoll.config.url || null },
     mypos: { mode: clients.mypos.mode },
     shopify: await clients.shopify.status({ warmToken: true }),

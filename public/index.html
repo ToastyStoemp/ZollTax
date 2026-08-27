@@ -1959,9 +1959,10 @@ const rid = () => Math.random().toString(36).slice(2);
 function buildImportPanel(st) {
   const panel = document.getElementById('importPanel');
   const srcs = [];
-  if (st.mypos) srcs.push(['mypos', 'myPOS', st.mypos.mode]);
-  if (st.shopify) srcs.push(['shopify', 'Shopify', st.shopify.mode]);
-  if (st.sumup) srcs.push(['sumup', 'SumUp', st.sumup.mode]);
+  const en = st.enabled || {};
+  if (st.mypos && en.mypos !== false) srcs.push(['mypos', 'myPOS', st.mypos.mode]);
+  if (st.shopify && en.shopify !== false) srcs.push(['shopify', 'Shopify', st.shopify.mode]);
+  if (st.sumup && en.sumup !== false) srcs.push(['sumup', 'SumUp', st.sumup.mode]);
   if (!srcs.length) { panel.style.display = 'none'; return; }
   panel.style.display = 'flex';
   document.getElementById('importSources').innerHTML = srcs.map(([id, name, mode]) =>
