@@ -289,6 +289,15 @@ h1 span{color:var(--accent)}
 .form-msg{font-size:.75rem;margin-top:10px;min-height:1em}
 .form-msg.bad{color:var(--red)}.form-msg.ok{color:var(--green)}
 .header-user{display:flex;align-items:center;gap:10px;font-size:.72rem;color:var(--muted)}
+/* ── Header menu (hamburger) ── */
+.menu-wrap{position:relative}
+.menu-btn{font-size:1rem;line-height:1;padding:6px 11px}
+.menu{position:absolute;right:0;top:calc(100% + 6px);min-width:190px;background:var(--surface);border:1px solid var(--border2);border-radius:10px;box-shadow:0 14px 44px rgba(0,0,0,.55);padding:6px;z-index:130}
+.menu-item{display:block;width:100%;text-align:left;background:none;border:none;color:var(--text);font-family:var(--font);font-size:.82rem;padding:8px 12px;border-radius:7px;cursor:pointer;white-space:nowrap}
+.menu-item:hover{background:var(--surface2)}
+.menu-item.danger{color:var(--red)}
+.menu-item.danger:hover{background:rgba(248,113,113,.12)}
+.menu-sep{height:1px;background:var(--border);margin:5px 6px}
 .icon-btn{background:var(--surface2);border:none;border-radius:8px;color:var(--text);font-family:var(--font);font-size:.72rem;padding:6px 12px;cursor:pointer;transition:background .15s}
 .icon-btn:hover{background:var(--surface3)}
 .user-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);font-size:.8rem}
@@ -308,10 +317,16 @@ h1 span{color:var(--accent)}
   <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
     <div id="headerUser" class="header-user" style="display:none">
       <span id="headerUserEmail"></span>
-      <button id="headerUsersBtn" class="icon-btn" style="display:none" onclick="openAdminUsers()">Users</button>
-      <button class="icon-btn" onclick="openSecurity()">🔒 Security</button>
-      <button class="icon-btn" onclick="openConfig()">⚙ Settings</button>
-      <button class="icon-btn" onclick="doLogout()">Log out</button>
+      <div class="menu-wrap">
+        <button class="icon-btn menu-btn" onclick="toggleMenu(event)" aria-label="Menu" aria-haspopup="true">☰</button>
+        <div id="headerMenu" class="menu" style="display:none">
+          <button class="menu-item" onclick="closeMenu();openConfig()">⚙ Settings</button>
+          <button class="menu-item" onclick="closeMenu();openSecurity()">🔒 Security</button>
+          <button id="headerUsersBtn" class="menu-item" style="display:none" onclick="closeMenu();openAdminUsers()">👥 Client accounts</button>
+          <div class="menu-sep"></div>
+          <button class="menu-item danger" onclick="closeMenu();doLogout()">Log out</button>
+        </div>
+      </div>
     </div>
     <div id="bridgeStatus" class="bridge-status"></div>
   </div>
@@ -2875,6 +2890,19 @@ async function revokeAdminSession(id) {
   await fetch('/api/admin/sessions/' + encodeURIComponent(id), { method: 'DELETE' }).catch(() => {});
   refreshAdminSessions();
 }
+
+// ── Header hamburger menu ──
+function toggleMenu(e) {
+  if (e) e.stopPropagation();
+  const m = document.getElementById('headerMenu');
+  m.style.display = m.style.display === 'none' ? 'block' : 'none';
+}
+function closeMenu() {
+  const m = document.getElementById('headerMenu');
+  if (m) m.style.display = 'none';
+}
+document.addEventListener('click', (e) => { if (!e.target.closest('.menu-wrap')) closeMenu(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
 
 document.addEventListener('DOMContentLoaded', boot);
 </script>
