@@ -2650,8 +2650,12 @@ function renderConfig(groups, values, enabled) {
       const hint = f.hint ? `<div class="hint">${f.hint}</div>` : '';
       const tplAttrs = isTemplate ? ' data-template="1" oninput="updateTplPreview(this)"' : '';
       const preview = isTemplate ? `<div class="hint tpl-preview" id="tplprev-${f.key}"></div>` : '';
-      return `<div class="field"><label>${f.label}${savedTag}</label>` +
-        `<input data-key="${f.key}" data-secret="${isSecret ? 1 : 0}"${tplAttrs} type="${isSecret ? 'password' : 'text'}" value="${String(val).replace(/"/g,'&quot;')}"${ph} autocomplete="off">${hint}${preview}</div>`;
+      const control = f.select
+        ? `<select data-key="${f.key}" data-secret="0">` +
+            f.options.map(o => `<option value="${String(o.value).replace(/"/g,'&quot;')}" ${val === o.value ? 'selected' : ''}>${o.label}</option>`).join('') +
+          `</select>`
+        : `<input data-key="${f.key}" data-secret="${isSecret ? 1 : 0}"${tplAttrs} type="${isSecret ? 'password' : 'text'}" value="${String(val).replace(/"/g,'&quot;')}"${ph} autocomplete="off">`;
+      return `<div class="field"><label>${f.label}${savedTag}</label>${control}${hint}${preview}</div>`;
     }).join('');
     return `<div class="cfg-group ${on ? '' : 'disabled'}" data-group="${g.id}">` +
       `<div class="cfg-group-head"><h3>${g.label}</h3>` +
@@ -2681,13 +2685,13 @@ async function saveConfig(silent) {
   const btn = document.getElementById('configSaveBtn');
   const msg = document.getElementById('configMsg');
   const set = {}, clear = [], enabled = {};
-  document.querySelectorAll('#configGroups input[data-key]').forEach(inp => {
+  document.querySelectorAll('#configGroups [data-key]').forEach(inp => {
     const key = inp.dataset.key, secret = inp.dataset.secret === '1', v = inp.value.trim();
     if (secret) { if (v) set[key] = v; }          // blank secret = leave unchanged
     else set[key] = v;                             // non-secret: send as-is (blank clears via merge below)
   });
   // Non-secret blanks should clear the stored value.
-  document.querySelectorAll('#configGroups input[data-key][data-secret="0"]').forEach(inp => {
+  document.querySelectorAll('#configGroups [data-key][data-secret="0"]').forEach(inp => {
     if (!inp.value.trim()) { clear.push(inp.dataset.key); delete set[inp.dataset.key]; }
   });
   document.querySelectorAll('#configGroups .clear-link[data-on="1"]').forEach(el => clear.push(el.dataset.clear));

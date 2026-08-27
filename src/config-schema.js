@@ -5,6 +5,13 @@
  * those loaders. `secret: true` fields are masked in the UI and never sent back
  * to the browser in cleartext.
  */
+/** Options for the mode selectors — blank value means auto-detect from creds. */
+const MODE_OPTIONS = [
+  { value: '', label: 'Auto (detect from credentials)' },
+  { value: 'live', label: 'Live' },
+  { value: 'mock', label: 'Mock (test data)' },
+];
+
 export const CONFIG_GROUPS = [
   {
     id: 'lexware',
@@ -45,7 +52,7 @@ export const CONFIG_GROUPS = [
       { key: 'MYPOS_MERCHANT_CLIENT_SECRET', label: 'Merchant client secret', secret: true },
       { key: 'MYPOS_PARTNER_ID', label: 'Partner ID', placeholder: 'mps-p-…' },
       { key: 'MYPOS_APPLICATION_ID', label: 'Application ID', placeholder: 'mps-app-…' },
-      { key: 'MYPOS_MODE', label: 'Mode (advanced)', placeholder: 'auto — leave blank', hint: 'Auto-detects from your credentials. Only set "mock" to force test data.' },
+      { key: 'MYPOS_MODE', label: 'Mode', select: true, options: MODE_OPTIONS, hint: 'Leave on Auto unless you want to force mock test data.' },
       { key: 'MYPOS_ACCOUNT', label: 'Default account (optional)' },
     ],
   },
@@ -59,7 +66,7 @@ export const CONFIG_GROUPS = [
       { key: 'SHOPIFY_CLIENT_SECRET', label: 'Client secret', secret: true },
       { key: 'SHOPIFY_ACCESS_TOKEN', label: 'Static access token (optional)', secret: true },
       { key: 'SHOPIFY_API_VERSION', label: 'API version', placeholder: '2024-10' },
-      { key: 'SHOPIFY_MODE', label: 'Mode (advanced)', placeholder: 'auto — leave blank', hint: 'Auto-detects from your credentials. Only set "mock" to force test data.' },
+      { key: 'SHOPIFY_MODE', label: 'Mode', select: true, options: MODE_OPTIONS, hint: 'Leave on Auto unless you want to force mock test data.' },
     ],
   },
   {
@@ -70,7 +77,7 @@ export const CONFIG_GROUPS = [
       { key: 'SUMUP_API_KEY', label: 'API key', secret: true },
       { key: 'SUMUP_MERCHANT_CODE', label: 'Merchant code' },
       { key: 'SUMUP_API_URL', label: 'API URL', placeholder: 'https://api.sumup.com' },
-      { key: 'SUMUP_MODE', label: 'Mode (advanced)', placeholder: 'auto — leave blank', hint: 'Auto-detects from your credentials. Only set "mock" to force test data.' },
+      { key: 'SUMUP_MODE', label: 'Mode', select: true, options: MODE_OPTIONS, hint: 'Leave on Auto unless you want to force mock test data.' },
     ],
   },
 ];
