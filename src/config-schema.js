@@ -45,7 +45,7 @@ export const CONFIG_GROUPS = [
       { key: 'MYPOS_MERCHANT_CLIENT_SECRET', label: 'Merchant client secret', secret: true },
       { key: 'MYPOS_PARTNER_ID', label: 'Partner ID', placeholder: 'mps-p-…' },
       { key: 'MYPOS_APPLICATION_ID', label: 'Application ID', placeholder: 'mps-app-…' },
-      { key: 'MYPOS_MODE', label: 'Mode', placeholder: 'live (blank = mock)' },
+      { key: 'MYPOS_MODE', label: 'Mode (advanced)', placeholder: 'auto — leave blank', hint: 'Auto-detects from your credentials. Only set "mock" to force test data.' },
       { key: 'MYPOS_ACCOUNT', label: 'Default account (optional)' },
     ],
   },
@@ -59,7 +59,7 @@ export const CONFIG_GROUPS = [
       { key: 'SHOPIFY_CLIENT_SECRET', label: 'Client secret', secret: true },
       { key: 'SHOPIFY_ACCESS_TOKEN', label: 'Static access token (optional)', secret: true },
       { key: 'SHOPIFY_API_VERSION', label: 'API version', placeholder: '2024-10' },
-      { key: 'SHOPIFY_MODE', label: 'Mode', placeholder: 'live (blank = mock)' },
+      { key: 'SHOPIFY_MODE', label: 'Mode (advanced)', placeholder: 'auto — leave blank', hint: 'Auto-detects from your credentials. Only set "mock" to force test data.' },
     ],
   },
   {
@@ -70,7 +70,7 @@ export const CONFIG_GROUPS = [
       { key: 'SUMUP_API_KEY', label: 'API key', secret: true },
       { key: 'SUMUP_MERCHANT_CODE', label: 'Merchant code' },
       { key: 'SUMUP_API_URL', label: 'API URL', placeholder: 'https://api.sumup.com' },
-      { key: 'SUMUP_MODE', label: 'Mode', placeholder: 'live (blank = mock)' },
+      { key: 'SUMUP_MODE', label: 'Mode (advanced)', placeholder: 'auto — leave blank', hint: 'Auto-detects from your credentials. Only set "mock" to force test data.' },
     ],
   },
 ];

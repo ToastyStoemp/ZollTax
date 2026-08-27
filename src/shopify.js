@@ -37,7 +37,8 @@ export function loadShopifyConfig(env = process.env) {
   const hasToken = !!(shop && accessToken);
   const hasClientCredentials = !!(shop && clientId && clientSecret);
   const hasCreds = hasToken || hasClientCredentials;
-  const mode = (env.SHOPIFY_MODE || (hasCreds ? 'live' : 'mock')).toLowerCase() === 'live' ? 'live' : 'mock';
+  const modeHint = (env.SHOPIFY_MODE || '').trim().toLowerCase();
+  const mode = modeHint === 'mock' ? 'mock' : modeHint === 'live' ? 'live' : hasCreds ? 'live' : 'mock';
   return {
     mode,
     shop,

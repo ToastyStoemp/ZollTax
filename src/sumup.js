@@ -25,7 +25,8 @@ export function loadSumupConfig(env = process.env) {
   const apiKey = env.SUMUP_API_KEY || '';
   const merchantCode = env.SUMUP_MERCHANT_CODE || '';
   const hasCreds = !!(apiKey && merchantCode);
-  const mode = (env.SUMUP_MODE || (hasCreds ? 'live' : 'mock')).toLowerCase() === 'live' ? 'live' : 'mock';
+  const modeHint = (env.SUMUP_MODE || '').trim().toLowerCase();
+  const mode = modeHint === 'mock' ? 'mock' : modeHint === 'live' ? 'live' : hasCreds ? 'live' : 'mock';
   return {
     mode,
     apiUrl: (env.SUMUP_API_URL || 'https://api.sumup.com').replace(/\/+$/, ''),

@@ -32,7 +32,10 @@ export function loadMyposConfig(env = process.env) {
   const hasCreds = !!(
     clientId && clientSecret && merchantClientId && merchantClientSecret && partnerId && applicationId
   );
-  const mode = (env.MYPOS_MODE || (hasCreds ? 'live' : 'mock')).toLowerCase() === 'live' ? 'live' : 'mock';
+  // Only an explicit "mock"/"live" overrides; anything else (blank, stray text,
+  // trailing space) falls back to auto-detect from whether creds are present.
+  const modeHint = (env.MYPOS_MODE || '').trim().toLowerCase();
+  const mode = modeHint === 'mock' ? 'mock' : modeHint === 'live' ? 'live' : hasCreds ? 'live' : 'mock';
   return {
     mode,
     gatewayUrl: (env.MYPOS_GATEWAY_URL || 'https://demo-api-gateway.mypos.com').replace(/\/+$/, ''),
