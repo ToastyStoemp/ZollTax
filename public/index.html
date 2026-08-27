@@ -275,6 +275,10 @@ h1 span{color:var(--accent)}
 .settings-savebar{position:sticky;bottom:0;background:var(--bg);padding:14px 0 4px;margin-top:8px;display:flex;gap:10px;align-items:center;border-top:1px solid var(--border)}
 .cfg-group-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:3px}
 .cfg-group-head h3{font-size:.95rem;font-weight:700;margin:0}
+.cfg-group-title{display:flex;align-items:center;gap:8px;flex:1;min-width:0;cursor:pointer;user-select:none}
+.cfg-caret{flex:none;color:var(--muted);font-size:.7rem;transition:transform .15s}
+.cfg-group.collapsed .cfg-caret{transform:rotate(-90deg)}
+.cfg-group.collapsed .ghint,.cfg-group.collapsed .cfg-fields{display:none}
 .switch{display:inline-flex;align-items:center;gap:7px;font-size:.72rem;color:var(--muted);cursor:pointer;white-space:nowrap}
 .switch input{accent-color:var(--accent)}
 .cfg-group.disabled{opacity:.6}
@@ -2657,8 +2661,9 @@ function renderConfig(groups, values, enabled) {
         : `<input data-key="${f.key}" data-secret="${isSecret ? 1 : 0}"${tplAttrs} type="${isSecret ? 'password' : 'text'}" value="${String(val).replace(/"/g,'&quot;')}"${ph} autocomplete="off">`;
       return `<div class="field"><label>${f.label}${savedTag}</label>${control}${hint}${preview}</div>`;
     }).join('');
-    return `<div class="cfg-group ${on ? '' : 'disabled'}" data-group="${g.id}">` +
-      `<div class="cfg-group-head"><h3>${g.label}</h3>` +
+    return `<div class="cfg-group collapsed ${on ? '' : 'disabled'}" data-group="${g.id}">` +
+      `<div class="cfg-group-head">` +
+      `<span class="cfg-group-title" onclick="toggleGroupCollapse(this)"><span class="cfg-caret">▼</span><h3>${g.label}</h3></span>` +
       `<label class="switch"><input type="checkbox" data-group-enable="${g.id}" ${on ? 'checked' : ''} onchange="onGroupToggle('${g.id}', this)"> Enabled</label></div>` +
       `<div class="ghint">${g.hint || ''}</div>` +
       `<div class="cfg-fields">${fields}` +
@@ -2673,6 +2678,9 @@ function updateTplPreview(inp) {
   if (!el) return;
   const str = inp.value.trim() || inp.placeholder || '';
   el.textContent = 'Example: ' + (renderTemplate(str, SAMPLE_VARS) || '—');
+}
+function toggleGroupCollapse(el) {
+  el.closest('.cfg-group')?.classList.toggle('collapsed');
 }
 function toggleClear(el) {
   el.dataset.on = el.dataset.on === '1' ? '0' : '1';
