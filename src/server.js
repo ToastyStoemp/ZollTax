@@ -370,8 +370,15 @@ async function testConnection(clients, group) {
       }
       case 'mypos': {
         if (clients.mypos.mode !== 'live') return { ok: false, detail: 'Missing myPOS credentials.' };
-        const accounts = await clients.mypos.listAccounts();
-        return { ok: true, detail: `Authenticated — ${accounts.length} account(s).` };
+        const gw = String(clients.mypos.config?.gatewayUrl || '').replace(/^https?:\/\//, '') || '(none)';
+        const cid = String(clients.mypos.config?.clientId || '');
+        const cidHint = cid ? `${cid.slice(0, 12)}…` : '(none)';
+        try {
+          const accounts = await clients.mypos.listAccounts();
+          return { ok: true, detail: `Authenticated — ${accounts.length} account(s) via ${gw}.` };
+        } catch (e) {
+          return { ok: false, detail: `${e instanceof Error ? e.message : String(e)} [gateway: ${gw}, client: ${cidHint}]` };
+        }
       }
       case 'shopify': {
         const st = await clients.shopify.status({ warmToken: true });
