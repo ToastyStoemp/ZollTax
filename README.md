@@ -42,6 +42,46 @@ Server-level env (all optional — the wizard fills in the essentials):
 | `ZOLLTAX_DATA_DIR` | Override where accounts + encrypted configs are stored (default `./data`). |
 | `ZOLLTAX_ENV_FILE` | Override the `.env` path the wizard reads/writes (e.g. a mounted secrets file). |
 
+### Docker
+
+```bash
+# generate the master key once, put it in .env, then:
+echo "ZOLLTAX_MASTER_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")" >> .env
+docker compose up -d --build
+```
+
+The image is zero-dependency (source + `node`, no build step). Accounts, the
+encrypted per-client configs, and sessions live on the `./data` volume, so they
+survive `--build` redeploys. In a container the setup wizard can't persist a
+generated key back into the image, so **`ZOLLTAX_MASTER_KEY` is required** (the
+compose file enforces it) — generate it once as above and keep it safe.
+
+### Auto-deploy from GitHub
+
+Every push to `main` runs `.github/workflows/deploy.yml`, which SSHes into the
+server and runs `deploy.sh` — gated on `AUTO_DEPLOY=1` in the server's own `.env`,
+so **pushing to GitHub never touches a server that hasn't opted in locally**:
+
+```sh
+# on the server, one-time
+echo "AUTO_DEPLOY=1" >> .env
+```
+
+Then add these repo secrets on GitHub (Settings → Secrets and variables → Actions):
+
+- `DEPLOY_HOST` — the server's hostname or IP
+- `DEPLOY_USER` — the SSH user to log in as
+- `DEPLOY_SSH_KEY` — a dedicated private key whose public key is in that user's `~/.ssh/authorized_keys`
+- `DEPLOY_PATH` — absolute path to this repo's checkout on the server
+- `DEPLOY_PORT` — optional, only if SSH isn't on port 22
+
+`deploy.sh` runs `git pull --ff-only` then `docker compose up -d --build` (adding
+`docker-compose.override.yml` if present), failing loudly rather than doing
+something surprising if the checkout has diverged. You can also trigger it from
+the **Actions** tab (`workflow_dispatch`). If you already deploy ZollTool this way
+on the same box, reuse the same `DEPLOY_HOST` / `DEPLOY_USER` / `DEPLOY_SSH_KEY` —
+only `DEPLOY_PATH` differs (this repo's own checkout).
+
 ### Accounts & configuration
 
 - **First run:** complete the setup wizard to create the admin account (or preset

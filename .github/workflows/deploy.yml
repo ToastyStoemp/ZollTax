@@ -1,0 +1,30 @@
+name: Deploy
+
+# Every push to main SSHes into the server and runs deploy.sh — which is itself
+# gated on AUTO_DEPLOY=1 in the server's own .env, so this workflow is a no-op
+# until the server owner opts in locally. See README.md "Auto-deploy from GitHub".
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH and run the (self-gated) deploy script
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          script: |
+            set -e
+            cd "${{ secrets.DEPLOY_PATH }}"
+            bash deploy.sh
