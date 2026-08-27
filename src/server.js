@@ -1,5 +1,5 @@
 import './load-env.js'; // MUST be first: loads .env before modules read process.env
-import { persistEnvVar } from './load-env.js';
+import './load-env.js'; // side effect: load .env into process.env before anything reads it
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -9,7 +9,7 @@ import { buildRevenueVoucher } from './voucher.js';
 import { buildFeeVoucher } from './expense.js';
 import { summarize } from './mypos.js';
 import { CONFIG_GROUPS, GROUP_IDS, redactConfig } from './config-schema.js';
-import { masterKeyConfigured, generateMasterKeyHex, resetMasterKeyCache, encryptJson, decryptJson } from './crypto.js';
+import { masterKeyConfigured, ensureMasterKey, encryptJson, decryptJson } from './crypto.js';
 import {
   authenticate,
   bootstrapAdmin,
@@ -502,15 +502,12 @@ const server = createServer(async (req, res) => {
       const cap = verifyChallenge(body.captchaToken, body.captchaSolution);
       if (!cap.ok) return send(res, 400, { error: cap.error });
       // Generate + persist an encryption key on first run if none was provided.
-      if (!masterKeyConfigured()) {
-        try {
-          persistEnvVar('ZOLLTAX_MASTER_KEY', generateMasterKeyHex());
-          resetMasterKeyCache();
-        } catch (e) {
-          return send(res, 500, {
-            error: `Could not save the encryption key to .env (${e.message}). Set ZOLLTAX_MASTER_KEY manually and retry.`,
-          });
-        }
+      try {
+        ensureMasterKey();
+      } catch (e) {
+        return send(res, 500, {
+          error: `Could not initialize the encryption key (${e.message}). Ensure the data dir is writable, or set ZOLLTAX_MASTER_KEY.`,
+        });
       }
       let user;
       try {
@@ -588,6 +585,16 @@ server.headersTimeout = 20_000; // headers must arrive within 20s
 server.keepAliveTimeout = 10_000; // idle keep-alive sockets close after 10s
 
 bootstrapAdmin();
+
+// Ensure an encryption key exists, generating + persisting one to the data
+// volume when neither an env key nor a prior key file is present. Self-heals
+// installs that reached this point without a key (e.g. an env-seeded admin, or
+// a container whose earlier key was written to an ephemeral .env).
+try {
+  ensureMasterKey();
+} catch (e) {
+  console.error(`  encryption: could not initialize key — ${e.message} (set ZOLLTAX_MASTER_KEY or make the data dir writable)`);
+}
 
 server.listen(PORT, () => {
   console.log(`\nZollTax → http://localhost:${PORT}`);

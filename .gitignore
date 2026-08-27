@@ -9,4 +9,6 @@ cache/
 data/users.json
 data/clients/
 data/sessions.json
+# Auto-generated AES master key (encrypts every tenant's secrets) — NEVER commit
+data/master.key
 docker-compose.override.yml

@@ -48,12 +48,13 @@ Server-level env (all optional — the wizard fills in the essentials):
 docker compose up -d --build      # then open http://localhost:4000 and follow the wizard
 ```
 
-**No `.env` needed.** On first run the setup wizard creates the admin account and
-generates the encryption key, persisting it to `/data/.env` on the mounted volume
-(via `ZOLLTAX_ENV_FILE`), so it's re-read on every restart and survives `--build`
-redeploys. Accounts, the encrypted per-client configs, and sessions also live on
-the `./data` volume. Every env var in the compose file is optional — set
-`ZOLLTAX_MASTER_KEY` yourself only for headless provisioning.
+**No `.env` needed.** On first start the app generates its AES encryption key and
+persists it as `data/master.key` (0600) on the mounted volume, so it's reloaded
+on every restart and survives `--build` redeploys — no `.env` round-trip. The
+setup wizard then creates the admin account. Accounts, the encrypted per-client
+configs, and sessions also live on the `./data` volume. Every env var in the
+compose file is optional — set `ZOLLTAX_MASTER_KEY` yourself only if you'd rather
+manage the key out-of-band (it always takes precedence over the generated file).
 
 ### Behind Caddy / a reverse proxy
 

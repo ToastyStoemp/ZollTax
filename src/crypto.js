@@ -16,8 +16,19 @@ import {
   createDecipheriv,
   createHmac,
 } from 'node:crypto';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 // ── Master key + session secret ──────────────────────────────────────────────
+
+// Where a generated key is persisted when no env key is supplied. Kept on the
+// data volume (same dir as store.js) so it survives restarts and image rebuilds
+// with no .env round-trip — the robust default for containers. Computed inline
+// (not imported from store.js) to avoid an import cycle.
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const DATA_DIR = process.env.ZOLLTAX_DATA_DIR || join(__dirname, '..', 'data');
+const KEY_FILE = join(DATA_DIR, 'master.key');
 
 /**
  * 32-byte AES key. Prefer ZOLLTAX_MASTER_KEY (64 hex chars / base64); otherwise
@@ -44,9 +55,34 @@ export function getMasterKey() {
     cachedKey = scryptSync(passphrase, 'zolltax-master-v1', 32);
     return cachedKey;
   }
+  // Persisted key file on the data volume (written by ensureMasterKey on first
+  // run) — survives restarts/rebuilds without any .env round-trip.
+  try {
+    const hex = readFileSync(KEY_FILE, 'utf8').trim();
+    if (/^[0-9a-fA-F]{64}$/.test(hex)) {
+      cachedKey = Buffer.from(hex, 'hex');
+      return cachedKey;
+    }
+  } catch {
+    /* no key file yet */
+  }
   throw new Error(
     'No encryption key configured. Set ZOLLTAX_MASTER_KEY (64 hex chars) or ZOLLTAX_MASTER_PASSPHRASE.'
   );
+}
+
+/**
+ * Return the master key, generating and persisting one to the data volume if
+ * none is configured (env / passphrase / existing key file). Lets a fresh
+ * install — a Docker container in particular — self-provision its key with no
+ * manual .env. A preset ZOLLTAX_MASTER_KEY always takes precedence.
+ */
+export function ensureMasterKey() {
+  if (masterKeyConfigured()) return getMasterKey();
+  mkdirSync(DATA_DIR, { recursive: true });
+  writeFileSync(KEY_FILE, generateMasterKeyHex(), { mode: 0o600 });
+  resetMasterKeyCache();
+  return getMasterKey();
 }
 
 export function masterKeyConfigured() {
@@ -69,7 +105,14 @@ export function resetMasterKeyCache() {
 }
 
 function sessionSecret() {
-  return process.env.ZOLLTAX_SESSION_SECRET || process.env.ZOLLTAX_MASTER_KEY || 'zolltax-dev-session-secret';
+  if (process.env.ZOLLTAX_SESSION_SECRET) return process.env.ZOLLTAX_SESSION_SECRET;
+  // Seed from the master key (env or persisted file) so cookies are signed with
+  // a strong, stable secret even when the key isn't in the environment.
+  try {
+    return getMasterKey().toString('hex');
+  } catch {
+    return 'zolltax-dev-session-secret';
+  }
 }
 
 // ── Passwords ────────────────────────────────────────────────────────────────
