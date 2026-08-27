@@ -39,7 +39,10 @@ export function persistEnvVar(key, value) {
 export function loadDotEnv() {
   let raw;
   try {
-    raw = readFileSync(join(projectRoot, '.env'), 'utf8');
+    // Read the same file persistEnvVar writes to (ZOLLTAX_ENV_FILE override),
+    // so a wizard-generated key persisted to e.g. a mounted /data/.env is
+    // re-read on the next start — not just the fixed projectRoot/.env.
+    raw = readFileSync(ENV_FILE, 'utf8');
   } catch {
     return; // no .env — rely on process.env
   }

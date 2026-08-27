@@ -45,16 +45,40 @@ Server-level env (all optional — the wizard fills in the essentials):
 ### Docker
 
 ```bash
-# generate the master key once, put it in .env, then:
-echo "ZOLLTAX_MASTER_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")" >> .env
-docker compose up -d --build
+docker compose up -d --build      # then open http://localhost:4000 and follow the wizard
 ```
 
-The image is zero-dependency (source + `node`, no build step). Accounts, the
-encrypted per-client configs, and sessions live on the `./data` volume, so they
-survive `--build` redeploys. In a container the setup wizard can't persist a
-generated key back into the image, so **`ZOLLTAX_MASTER_KEY` is required** (the
-compose file enforces it) — generate it once as above and keep it safe.
+**No `.env` needed.** On first run the setup wizard creates the admin account and
+generates the encryption key, persisting it to `/data/.env` on the mounted volume
+(via `ZOLLTAX_ENV_FILE`), so it's re-read on every restart and survives `--build`
+redeploys. Accounts, the encrypted per-client configs, and sessions also live on
+the `./data` volume. Every env var in the compose file is optional — set
+`ZOLLTAX_MASTER_KEY` yourself only for headless provisioning.
+
+### Behind Caddy / a reverse proxy
+
+The container is always named `zolltax` (pinned in `docker-compose.yml`), so a
+separate Caddy container can `reverse_proxy zolltax:4000` by name — but only once
+they share a Docker network. Don't hard-code that network in the tracked compose
+(it would break `up` where the network doesn't exist, and conflict on `git pull`).
+Instead create the shared network once and join it from a **gitignored**
+`docker-compose.override.yml` on the server (which `deploy.sh` picks up automatically):
+
+```sh
+docker network create zollnet   # once, shared by Caddy + every app
+```
+
+```yaml
+# docker-compose.override.yml (gitignored, per-host)
+services:
+  zolltax:
+    networks: [default, zollnet]
+networks:
+  zollnet:
+    external: true
+```
+
+Put Caddy on `zollnet` too, then in your Caddyfile: `reverse_proxy zolltax:4000`.
 
 ### Auto-deploy from GitHub
 

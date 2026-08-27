@@ -11,7 +11,8 @@ WORKDIR /app
 # sessions) lives on the mounted /data volume so it survives image rebuilds.
 ENV NODE_ENV=production \
     PORT=4000 \
-    ZOLLTAX_DATA_DIR=/data
+    ZOLLTAX_DATA_DIR=/data \
+    ZOLLTAX_ENV_FILE=/data/.env
 
 COPY package.json ./
 COPY src ./src

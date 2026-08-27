@@ -1,9 +1,9 @@
 # Run from the repo root:  docker compose up -d --build
 #
-# Put the secrets below in a .env file next to this compose file (gitignored).
-# Generate the 32-byte master key once (losing/changing it makes every stored
-# client config unreadable):
-#   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+# No .env needed to start: open the app and the first-run setup wizard creates
+# the admin account and generates + persists the encryption key to /data/.env on
+# the mounted volume (so it survives rebuilds). Everything below is OPTIONAL —
+# set a value only to preset it / provision headlessly.
 services:
   zolltax:
     container_name: zolltax
@@ -17,11 +17,13 @@ services:
     environment:
       PORT: 4000
       ZOLLTAX_DATA_DIR: /data
-      # Required — encrypts every tenant's stored secrets at rest.
-      ZOLLTAX_MASTER_KEY: ${ZOLLTAX_MASTER_KEY:?set ZOLLTAX_MASTER_KEY in .env (32-byte hex)}
-      # Signs session cookies (defaults to the master key if unset).
+      ZOLLTAX_ENV_FILE: /data/.env
+      # Optional — preset the encryption key instead of letting the wizard
+      # generate it (32-byte hex). Only needed for headless provisioning.
+      ZOLLTAX_MASTER_KEY: ${ZOLLTAX_MASTER_KEY:-}
+      # Optional — signs session cookies (defaults to the master key).
       ZOLLTAX_SESSION_SECRET: ${ZOLLTAX_SESSION_SECRET:-}
-      # Optional: seed the first admin instead of using the setup wizard.
+      # Optional — seed the first admin instead of using the wizard.
       ZOLLTAX_ADMIN_EMAIL: ${ZOLLTAX_ADMIN_EMAIL:-}
       ZOLLTAX_ADMIN_PASSWORD: ${ZOLLTAX_ADMIN_PASSWORD:-}
       # Send the session cookie only over HTTPS — set 1 behind a TLS proxy.
