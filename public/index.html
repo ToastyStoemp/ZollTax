@@ -25,7 +25,7 @@ h1 span{color:var(--accent)}
 
 /* ── Upload ── */
 .upload-zone{border:2px dashed var(--border);border-radius:12px;padding:44px 32px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:28px}
-.upload-zone:hover,.upload-zone.dragover{border-color:var(--accent);background:rgba(240,192,64,.04)}
+.upload-zone:hover,.upload-zone.dragover{border-color:var(--accent);background:rgba(52,211,153,.05)}
 .upload-zone .icon{font-size:2.2rem;margin-bottom:10px}
 .upload-zone h3{font-family:var(--font);font-size:1rem;margin-bottom:5px}
 .upload-zone p{color:var(--muted);font-size:.78rem}
@@ -48,7 +48,7 @@ h1 span{color:var(--accent)}
 .filter-label{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
 .pill{padding:5px 13px;border-radius:20px;font-size:.72rem;cursor:pointer;border:1px solid var(--border);background:var(--surface);transition:all .15s;font-family:var(--font)}
 .pill:hover{border-color:var(--muted)}
-.pill.active{background:var(--accent);color:#111;border-color:var(--accent);font-weight:500}
+.pill.active{background:#059669;color:#fff;border-color:#059669;font-weight:500}
 .pill.device-go2.active{background:var(--accent2);color:#fff;border-color:var(--accent2)}
 
 /* ── Cluster card ── */
@@ -200,8 +200,8 @@ h1 span{color:var(--accent)}
 .acct-badge.good{color:var(--green);border-color:rgba(52,211,153,.4);background:rgba(52,211,153,.08)}
 .acct-badge.warn{color:var(--orange);border-color:rgba(251,191,36,.4);background:rgba(251,191,36,.08)}
 .acct-badge.bad{color:var(--red);border-color:rgba(248,113,113,.4);background:rgba(248,113,113,.08)}
-.edt-btn-book{color:#052e16;background:var(--accent);border-color:var(--accent);font-weight:600}
-.edt-btn-book:hover{background:#6ee7b7;border-color:#6ee7b7}
+.edt-btn-book{color:#fff;background:#059669;border-color:#059669;font-weight:600}
+.edt-btn-book:hover{background:#10b981;border-color:#10b981}
 .edt-btn-book:disabled{opacity:.4;cursor:not-allowed}
 .pdf-btn.edt-btn-book{padding:7px 14px}
 .ready-badge{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:var(--green);color:#052e16;font-size:.72rem;font-weight:800;flex-shrink:0}
@@ -255,8 +255,8 @@ h1 span{color:var(--accent)}
 .modal-close{background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;line-height:1;padding:2px 6px}
 .modal-close:hover{color:var(--text)}
 .field{margin-bottom:12px}
-.field label{display:block;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px}
-.field input,.field select{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:var(--font);font-size:.85rem;padding:9px 11px}
+.field label{display:block;font-size:.8rem;color:var(--muted);margin-bottom:5px}
+.field input,.field select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:.85rem;padding:9px 11px}
 .field input:focus,.field select:focus{outline:none;border-color:var(--accent)}
 .field .hint{font-size:.66rem;color:var(--muted2);margin-top:4px}
 .field .tpl-preview{color:var(--accent2);font-style:italic}
@@ -267,15 +267,15 @@ h1 span{color:var(--accent)}
 .cfg-group{border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px}
 .cfg-group>h3{font-size:.9rem;font-weight:700;margin-bottom:3px}
 .cfg-group>.ghint{font-size:.7rem;color:var(--muted);margin-bottom:12px}
-.btn-primary{background:var(--accent);color:#052e16;border:none;border-radius:8px;font-family:var(--font);font-size:.82rem;font-weight:600;padding:10px 18px;cursor:pointer}
-.btn-primary:hover{background:#6ee7b7}.btn-primary:disabled{opacity:.45;cursor:not-allowed}
-.btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border2);border-radius:8px;font-family:var(--font);font-size:.82rem;padding:10px 16px;cursor:pointer}
-.btn-ghost:hover{border-color:var(--muted)}
+.btn-primary{background:#059669;color:#fff;border:none;border-radius:8px;font-family:var(--font);font-size:.82rem;font-weight:600;padding:10px 18px;cursor:pointer;transition:background .15s}
+.btn-primary:hover{background:#10b981}.btn-primary:disabled{opacity:.45;cursor:not-allowed}
+.btn-ghost{background:var(--surface2);color:var(--text);border:none;border-radius:8px;font-family:var(--font);font-size:.82rem;padding:10px 16px;cursor:pointer;transition:background .15s}
+.btn-ghost:hover{background:var(--surface3)}
 .form-msg{font-size:.75rem;margin-top:10px;min-height:1em}
 .form-msg.bad{color:var(--red)}.form-msg.ok{color:var(--green)}
 .header-user{display:flex;align-items:center;gap:10px;font-size:.72rem;color:var(--muted)}
-.icon-btn{background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:var(--font);font-size:.72rem;padding:6px 12px;cursor:pointer}
-.icon-btn:hover{border-color:var(--muted)}
+.icon-btn{background:var(--surface2);border:none;border-radius:8px;color:var(--text);font-family:var(--font);font-size:.72rem;padding:6px 12px;cursor:pointer;transition:background .15s}
+.icon-btn:hover{background:var(--surface3)}
 .user-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);font-size:.8rem}
 .user-row:last-child{border-bottom:none}
 .user-row .um-email{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
