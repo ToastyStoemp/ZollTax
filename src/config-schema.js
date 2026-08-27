@@ -45,7 +45,10 @@ export const CONFIG_GROUPS = [
     label: 'myPOS Banking API',
     hint: 'Verifies clusters against live settled data. From the myPOS Partner Portal.',
     fields: [
-      { key: 'MYPOS_GATEWAY_URL', label: 'Gateway URL', placeholder: 'https://api-gateway.mypos.com' },
+      { key: 'MYPOS_GATEWAY_URL', label: 'Gateway', select: true, options: [
+        { value: '', label: 'Production' },
+        { value: 'https://demo-api-gateway.mypos.com', label: 'Demo / sandbox' },
+      ], hint: 'Use Production with live Partner Portal credentials; Demo only for sandbox testing.' },
       { key: 'MYPOS_CLIENT_ID', label: 'Integration client ID' },
       { key: 'MYPOS_CLIENT_SECRET', label: 'Integration client secret', secret: true },
       { key: 'MYPOS_MERCHANT_CLIENT_ID', label: 'Merchant client ID' },

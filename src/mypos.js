@@ -38,7 +38,9 @@ export function loadMyposConfig(env = process.env) {
   const mode = modeHint === 'mock' ? 'mock' : modeHint === 'live' ? 'live' : hasCreds ? 'live' : 'mock';
   return {
     mode,
-    gatewayUrl: (env.MYPOS_GATEWAY_URL || 'https://demo-api-gateway.mypos.com').replace(/\/+$/, ''),
+    // Default to PRODUCTION when unset — the demo gateway rejects live creds with
+    // "invalid_client", which used to bite anyone who left this blank.
+    gatewayUrl: (env.MYPOS_GATEWAY_URL || 'https://api-gateway.mypos.com').replace(/\/+$/, ''),
     clientId,
     clientSecret,
     merchantClientId,
