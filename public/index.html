@@ -15,7 +15,32 @@
   --font:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;padding:28px 22px}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh}
+/* ── App shell: ZollTool-style sidebar ── */
+.app-shell{display:flex;min-height:100vh}
+.sidebar{width:210px;flex:none;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:16px 12px;gap:3px}
+.sidebar-brand{padding:6px 10px 16px}
+.sidebar-brand h1{font-size:1.4rem;font-weight:800;letter-spacing:-.02em;line-height:1}
+.sidebar-brand h1 span{color:var(--accent)}
+.sidebar-brand .subtitle{font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-top:6px}
+.nav-item{display:flex;align-items:center;gap:11px;width:100%;text-align:left;padding:9px 11px;border-radius:9px;border:0;background:none;color:var(--muted);font-family:var(--font);font-size:.85rem;font-weight:500;cursor:pointer;transition:background .12s,color .12s}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:var(--surface2);color:var(--accent)}
+.nav-item.danger:hover{background:rgba(248,113,113,.12);color:var(--red)}
+.nav-item svg{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.sidebar-spacer{flex:1;min-height:8px}
+.sidebar-user{font-size:.68rem;color:var(--muted);padding:8px 11px;border-top:1px solid var(--border);word-break:break-all}
+.app-main{flex:1;min-width:0;overflow-x:hidden;padding:26px 26px}
+.app-topbar{display:flex;justify-content:flex-end;align-items:center;min-height:22px;margin-bottom:14px}
+@media(max-width:768px){
+  .app-shell{flex-direction:column}
+  .sidebar{width:auto;flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px;border-right:0;border-bottom:1px solid var(--border);padding:10px 14px}
+  .sidebar-brand{padding:0 10px 0 0}
+  .sidebar-brand .subtitle{display:none}
+  .sidebar-spacer,.sidebar-user{display:none}
+  .nav-item{width:auto;padding:8px 10px}
+  .app-main{padding:18px 16px}
+}
 
 /* ── Header ── */
 header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:32px;padding-bottom:20px;border-bottom:1px solid var(--border);flex-wrap:wrap}
@@ -346,29 +371,25 @@ h1 span{color:var(--accent)}
 </head>
 <body>
 
-<header>
-  <div>
-    <div class="subtitle">myPOS · Shopify · ZollTool · Lexware</div>
-    <h1>Zoll<span>Tax</span></h1>
-  </div>
-  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
-    <div id="headerUser" class="header-user" style="display:none">
-      <span id="headerUserEmail"></span>
-      <div class="menu-wrap">
-        <button class="icon-btn menu-btn" onclick="toggleMenu(event)" aria-label="Menu" aria-haspopup="true">☰</button>
-        <div id="headerMenu" class="menu" style="display:none">
-          <button class="menu-item" onclick="closeMenu();openLedger()">Ledger</button>
-          <button class="menu-item" onclick="closeMenu();openConfig()">Settings</button>
-          <button class="menu-item" onclick="closeMenu();openSecurity()">Security</button>
-          <button id="headerUsersBtn" class="menu-item" style="display:none" onclick="closeMenu();openAdminUsers()">Client accounts</button>
-          <div class="menu-sep"></div>
-          <button class="menu-item danger" onclick="closeMenu();doLogout()">Log out</button>
-        </div>
-      </div>
+<div class="app-shell" id="appShell" style="display:none">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <h1>Zoll<span>Tax</span></h1>
+      <div class="subtitle">myPOS · Shopify · ZollTool · Lexware</div>
     </div>
-    <div id="bridgeStatus" class="bridge-status"></div>
-  </div>
-</header>
+    <nav class="sidebar-nav" style="display:flex;flex-direction:column;gap:3px;width:100%">
+      <button class="nav-item active" data-nav="home" onclick="navGo('home')"><svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M4 21h16"/></svg>Import</button>
+      <button class="nav-item" data-nav="ledger" onclick="navGo('ledger')"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v18H6a2 2 0 0 1-2-2z"/><path d="M8 8h8"/><path d="M8 12h8"/></svg>Ledger</button>
+      <button class="nav-item" data-nav="settings" onclick="navGo('settings')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7.7 1.6 1.6 0 0 1-3.2 0 1.6 1.6 0 0 0-2.7-.7l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 4.6 15a1.6 1.6 0 0 1 0-3.2 1.6 1.6 0 0 0 .7-2.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 2.7-.7 1.6 1.6 0 0 1 3.2 0 1.6 1.6 0 0 0 2.7.7l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 .3 1.8"/></svg>Settings</button>
+      <button class="nav-item" data-nav="security" onclick="navGo('security')"><svg viewBox="0 0 24 24"><path d="M12 3 5 6v6c0 4 3 7 7 8 4-1 7-4 7-8V6z"/></svg>Security</button>
+      <button id="navUsers" class="nav-item" style="display:none" data-nav="users" onclick="navGo('users')"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 6a3 3 0 0 1 0 6"/><path d="M20.5 20a5.5 5.5 0 0 0-4-5.3"/></svg>Client accounts</button>
+    </nav>
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-user"><span id="headerUserEmail"></span></div>
+    <button class="nav-item danger" onclick="doLogout()"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>Log out</button>
+  </aside>
+  <main class="app-main">
+    <div class="app-topbar"><div id="bridgeStatus" class="bridge-status"></div></div>
 
 <div class="io-row">
 <div class="upload-zone" id="uploadZone">
@@ -412,6 +433,8 @@ h1 span{color:var(--accent)}
   <div class="clusters-grid" id="clustersGrid"></div>
 </div>
 <div class="no-data" id="noData" style="display:none"><div class="big">∅</div><div>No clusters match the current filter.</div></div>
+  </main>
+</div>
 
 <div id="progressOverlay" class="progress-overlay" style="display:none">
   <div class="progress-card">
@@ -2544,7 +2567,7 @@ window.fetch = async (input, init) => {
 
 function showLogin() {
   window.currentUser = null;
-  document.getElementById('headerUser').style.display = 'none';
+  document.getElementById('appShell').style.display = 'none';
   document.getElementById('loginOverlay').style.display = 'flex';
   setTimeout(() => document.getElementById('loginEmail').focus(), 30);
 }
@@ -2598,10 +2621,29 @@ async function doLogout() {
 function onAuthenticated(user) {
   window.currentUser = user;
   document.getElementById('loginOverlay').style.display = 'none';
-  document.getElementById('headerUser').style.display = 'flex';
+  document.getElementById('appShell').style.display = 'flex';
   document.getElementById('headerUserEmail').textContent = user.email;
-  document.getElementById('headerUsersBtn').style.display = user.role === 'admin' ? '' : 'none';
+  document.getElementById('navUsers').style.display = user.role === 'admin' ? '' : 'none';
+  navGo('home');
   loadBridge();
+}
+
+// Sidebar navigation: 'home' shows the import dashboard; the rest open overlays.
+function setActiveNav(section) {
+  document.querySelectorAll('.sidebar .nav-item[data-nav]').forEach((b) => {
+    b.classList.toggle('active', b.getAttribute('data-nav') === section);
+  });
+}
+function navGo(section) {
+  // Close any open overlay first so switching sections is clean.
+  ['configOverlay', 'ledgerOverlay', 'securityOverlay', 'usersOverlay'].forEach((id) => {
+    const el = document.getElementById(id); if (el) el.style.display = 'none';
+  });
+  if (section === 'ledger') openLedger();
+  else if (section === 'settings') openConfig();
+  else if (section === 'security') openSecurity();
+  else if (section === 'users') openAdminUsers();
+  setActiveNav(section);
 }
 
 async function boot() {
@@ -2670,7 +2712,7 @@ async function openConfig() {
     renderConfig(d.groups, d.values, window.cfgEnabled);
   } catch { host.innerHTML = '<p class="form-msg bad">Could not load settings.</p>'; }
 }
-function closeConfig() { document.getElementById('configOverlay').style.display = 'none'; }
+function closeConfig() { document.getElementById('configOverlay').style.display = 'none'; setActiveNav('home'); }
 
 // ── ZollLedger: per-event expenses + P&L ─────────────────────────────────────
 const LG_CATS = [
@@ -2685,7 +2727,7 @@ const lgMoney = (n, cur) => (Number(n) || 0).toLocaleString(undefined, { minimum
 function lgMsg(t) { const m = document.getElementById('ledgerMsg'); if (m) m.textContent = t || ''; }
 
 function openLedger() { document.getElementById('ledgerOverlay').style.display = 'block'; ledgerShowPnl(); }
-function closeLedger() { document.getElementById('ledgerOverlay').style.display = 'none'; }
+function closeLedger() { document.getElementById('ledgerOverlay').style.display = 'none'; setActiveNav('home'); }
 
 async function ledgerShowPnl() {
   document.getElementById('ledgerBackBtn').style.display = 'none';
@@ -2931,7 +2973,7 @@ async function openAdminUsers() {
   await refreshUsers();
   refreshAdminSessions();
 }
-function closeAdminUsers() { document.getElementById('usersOverlay').style.display = 'none'; }
+function closeAdminUsers() { document.getElementById('usersOverlay').style.display = 'none'; setActiveNav('home'); }
 
 async function refreshUsers() {
   const host = document.getElementById('usersList');
@@ -2986,7 +3028,7 @@ function openSecurity() {
   load2fa();
   refreshMySessions();
 }
-function closeSecurity() { document.getElementById('securityOverlay').style.display = 'none'; }
+function closeSecurity() { document.getElementById('securityOverlay').style.display = 'none'; setActiveNav('home'); }
 
 async function load2fa() {
   const host = document.getElementById('twofaBody');
