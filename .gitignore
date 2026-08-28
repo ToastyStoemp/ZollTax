@@ -11,4 +11,6 @@ data/clients/
 data/sessions.json
 # Auto-generated AES master key (encrypts every tenant's secrets) — NEVER commit
 data/master.key
+# ZollLedger: per-tenant expenses + uploaded invoice PDFs
+data/ledger/
 docker-compose.override.yml

@@ -27,6 +27,10 @@ import {
   setPassword,
 } from './store.js';
 import { getTenantClients, invalidateTenant } from './tenant.js';
+import {
+  EXPENSE_CATEGORIES, listExpenses, addExpense, updateExpense, deleteExpense,
+  saveInvoice, readInvoice, computePnl,
+} from './ledger.js';
 import { rateLimit } from './rate-limit.js';
 import { createSession, getSession, touchSession, revokeSession, revokeAllForUser, listForUser, listAll } from './sessions.js';
 import { parseDevice, lookupGeo, geoEnabled } from './geo.js';
@@ -210,6 +214,35 @@ const routes = {
     return { eventId, cash: Math.round(cash * 100) / 100, currency, count };
   },
 
+  // ── ZollLedger: per-event expenses + P&L ──
+  'GET /api/ledger/expenses': async ({ user, url }) => ({
+    categories: EXPENSE_CATEGORIES,
+    expenses: listExpenses(user.id, url.searchParams.get('eventId') || undefined),
+  }),
+  'POST /api/ledger/expenses': async ({ user, body }) => ({ expense: addExpense(user.id, body || {}) }),
+  'GET /api/ledger/pnl': async ({ user, clients }) => {
+    const expenses = listExpenses(user.id);
+    // Event list (for names/countries) — degrade gracefully if ZollTool is off.
+    let events = [];
+    try { events = await clients.zoll.getEvents(); } catch { /* unreachable */ }
+    const known = new Set(events.map((e) => e.id));
+    for (const ex of expenses) {
+      if (ex.eventId && !known.has(ex.eventId)) { events.push({ id: ex.eventId, name: ex.eventId, venue: {}, dateStart: '' }); known.add(ex.eventId); }
+    }
+    // Revenue = sum of non-reverted transactions per event, in base currency.
+    const revenueByEvent = {};
+    try {
+      for (const t of await clients.zoll.getTransactions()) {
+        if (t.revertedBy) continue;
+        const base = t.baseTotal != null ? Number(t.baseTotal) : (Number(t.total) || 0) / (t.exchangeRate || 1);
+        revenueByEvent[t.eventId] = (revenueByEvent[t.eventId] || 0) + base;
+      }
+    } catch { /* revenue stays 0 when ZollTool is unreachable */ }
+    const rows = computePnl(events, revenueByEvent, expenses)
+      .sort((a, b) => (b.start || '').localeCompare(a.start || ''));
+    return { rows, sourceOk: clients.zoll.configured };
+  },
+
   'GET /api/mypos/accounts': async ({ clients }) => ({
     mode: clients.mypos.mode,
     accounts: await clients.mypos.listAccounts(),
@@ -347,6 +380,29 @@ async function sessionSubroute(method, path, ctx) {
     requireAdmin(ctx.user);
     revokeSession(m[1]);
     return { ok: true };
+  }
+  return undefined;
+}
+
+// ZollLedger: edit/delete an expense, or attach its invoice PDF (id in the path).
+async function ledgerSubroute(method, path, ctx) {
+  let m = /^\/api\/ledger\/expenses\/([^/]+)$/.exec(path);
+  if (m) {
+    if (method === 'PUT') {
+      const expense = updateExpense(ctx.user.id, m[1], ctx.body || {});
+      if (!expense) throw new HttpError(404, 'Expense not found');
+      return { expense };
+    }
+    if (method === 'DELETE') {
+      if (!deleteExpense(ctx.user.id, m[1])) throw new HttpError(404, 'Expense not found');
+      return { ok: true };
+    }
+  }
+  m = /^\/api\/ledger\/expenses\/([^/]+)\/invoice$/.exec(path);
+  if (m && method === 'POST') {
+    const expense = saveInvoice(ctx.user.id, m[1], (ctx.body || {}).base64, (ctx.body || {}).filename);
+    if (!expense) throw new HttpError(400, 'No such expense, or the file was empty.');
+    return { expense };
   }
   return undefined;
 }
@@ -565,7 +621,21 @@ const server = createServer(async (req, res) => {
     touchSession(sess.id);
     const ctx = { url, body, user, sessionId: sess.id, clients: getTenantClients(user.id) };
 
-    const sub = (await adminUserSubroute(method, path, ctx)) ?? (await sessionSubroute(method, path, ctx));
+    // Ledger invoice PDF download (binary — bypasses the JSON senders).
+    const invM = /^\/api\/ledger\/expenses\/([^/]+)\/invoice$/.exec(path);
+    if (method === 'GET' && invM) {
+      const inv = readInvoice(user.id, invM[1]);
+      if (!inv) return send(res, 404, { error: 'No invoice on file.' });
+      res.writeHead(200, {
+        'content-type': 'application/pdf',
+        'content-disposition': `inline; filename="${inv.filename.replace(/["\r\n]/g, '')}"`,
+      });
+      return res.end(inv.buffer);
+    }
+
+    const sub = (await adminUserSubroute(method, path, ctx))
+      ?? (await sessionSubroute(method, path, ctx))
+      ?? (await ledgerSubroute(method, path, ctx));
     if (sub !== undefined) return send(res, 200, sub);
 
     const handler = routes[`${method} ${path}`];
