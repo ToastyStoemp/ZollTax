@@ -20,12 +20,20 @@ if [ "$AUTO_DEPLOY" != "1" ] && [ "$AUTO_DEPLOY" != "true" ]; then
 fi
 
 echo "AUTO_DEPLOY enabled — pulling and rebuilding..."
+echo "  was at: $(git rev-parse --short HEAD 2>/dev/null || echo '?')"
+git fetch --prune origin
 git pull --ff-only
+echo "  now at: $(git rev-parse --short HEAD 2>/dev/null || echo '?') — $(git log -1 --pretty=%s 2>/dev/null)"
 
 compose_files=(-f docker-compose.yml)
 if [ -f docker-compose.override.yml ]; then
   compose_files+=(-f docker-compose.override.yml)
 fi
 
-docker compose "${compose_files[@]}" --env-file "$ENV_FILE" up -d --build
+# --force-recreate guarantees the running container is replaced with the freshly
+# built image, even when Compose would otherwise consider it unchanged (the usual
+# "code pushed but the container didn't restart" trap). --remove-orphans cleans up
+# any services dropped from the compose file.
+docker compose "${compose_files[@]}" --env-file "$ENV_FILE" up -d --build --force-recreate --remove-orphans
 echo "Deploy complete."
+docker compose "${compose_files[@]}" ps || true
