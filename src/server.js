@@ -286,6 +286,16 @@ const routes = {
   'POST /api/lexware/book': async ({ body, clients }) => bookVoucher(body, clients.lexware),
 
   // ── Two-factor auth (TOTP authenticator) ───────────────────────────────────
+  // Account: change your own password (verifies the current one).
+  'PUT /api/account/password': async ({ user, body }) => {
+    const cur = String((body || {}).currentPassword || '');
+    const next = String((body || {}).newPassword || '');
+    if (next.length < 8) throw new HttpError(400, 'New password must be at least 8 characters.');
+    if (!authenticate(user.email, cur)) throw new HttpError(401, 'Current password is incorrect.');
+    setPassword(user.id, next);
+    return { ok: true };
+  },
+
   'GET /api/2fa/status': async ({ user }) => ({ enabled: has2fa(user.id) }),
   'POST /api/2fa/setup': async ({ user }) => {
     // Generate a secret and stash it (encrypted, not yet enabled). Shown once for
