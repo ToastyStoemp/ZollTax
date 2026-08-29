@@ -345,6 +345,20 @@ h1 span{color:var(--accent)}
 .lg-linkbtn.danger{color:var(--red)}
 .lg-totals{display:flex;gap:18px;flex-wrap:wrap;margin:2px 0 8px;font-size:.8rem}
 .lg-totals b{font-variant-numeric:tabular-nums}
+/* P&L summary cards + carded events table */
+.lg-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:6px 0 20px}
+@media(max-width:560px){.lg-summary{grid-template-columns:1fr}}
+.lg-stat{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:3px}
+.lg-stat.net{background:linear-gradient(180deg,rgba(52,211,153,.06),transparent);border-color:var(--border2)}
+.lg-stat-label{font-size:.62rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.lg-stat-val{font-size:1.5rem;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.1}
+.lg-stat-sub{font-size:.68rem;color:var(--muted2)}
+.lg-table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.lg-table-wrap .lg-table th{padding-left:16px;padding-right:16px}
+.lg-table-wrap .lg-table td{padding-left:16px;padding-right:16px}
+.lg-table-wrap .lg-table tbody tr:last-child td{border-bottom:0}
+.lg-go{color:var(--muted2);width:1%;text-align:right;font-size:1.05rem;line-height:1}
+.lg-table tbody tr:hover .lg-go{color:var(--accent)}
 .cfg-group-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:3px}
 .cfg-group-head h3{font-size:.95rem;font-weight:700;margin:0}
 .cfg-group-title{display:flex;align-items:center;gap:8px;flex:1;min-width:0;cursor:pointer;user-select:none}
@@ -375,6 +389,10 @@ h1 span{color:var(--accent)}
 .menu-sep{height:1px;background:var(--border);margin:5px 6px}
 .icon-btn{background:var(--surface2);border:none;border-radius:8px;color:var(--text);font-family:var(--font);font-size:.72rem;padding:6px 12px;cursor:pointer;transition:background .15s}
 .icon-btn:hover{background:var(--surface3)}
+/* Square chevron back button — matches ZollTool's Settings sub-page header. */
+.back-btn{display:inline-flex;align-items:center;justify-content:center;background:var(--surface2);border:none;border-radius:9px;color:var(--muted);padding:8px;cursor:pointer;transition:background .12s,color .12s}
+.back-btn:hover{background:var(--surface3);color:var(--text)}
+.back-btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;display:block}
 .user-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);font-size:.8rem}
 .user-row:last-child{border-bottom:none}
 .user-row .um-email{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -523,7 +541,7 @@ h1 span{color:var(--accent)}
 <div id="accountOverlay" class="settings-view" style="display:none">
   <div class="settings-inner">
     <div class="settings-head">
-      <button class="icon-btn" onclick="backToSettings()">← Back</button>
+      <button class="back-btn" aria-label="Back to Settings" onclick="backToSettings()"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button>
       <h2>Account &amp; Security</h2>
     </div>
     <div class="cfg-group">
@@ -582,7 +600,7 @@ h1 span{color:var(--accent)}
 <div id="configOverlay" class="settings-view" style="display:none">
   <div class="settings-inner">
     <div class="settings-head">
-      <button class="icon-btn" onclick="backToSettings()">← Back</button>
+      <button class="back-btn" aria-label="Back to Settings" onclick="backToSettings()"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button>
       <h2 id="configTitle">Settings</h2>
       <div class="settings-head-actions">
         <span id="configMsg" class="form-msg" style="margin-top:0"></span>
@@ -2849,13 +2867,20 @@ async function ledgerShowPnl() {
       '<td class="lg-exp-sub">' + lgEsc(r.start || '') + '</td>' +
       '<td class="lg-num">' + lgMoney(r.revenue, cur) + '</td>' +
       '<td class="lg-num">' + lgMoney(r.expenses, cur) + badge + '</td>' +
-      '<td class="lg-num ' + mCls + '">' + lgMoney(r.margin, cur) + '</td></tr>';
+      '<td class="lg-num ' + mCls + '">' + lgMoney(r.margin, cur) + '</td>' +
+      '<td class="lg-go">›</td></tr>';
   }).join('');
+  const net = tRev - tExp;
+  const pct = tRev ? Math.round((net / tRev) * 100) : 0;
+  const evCount = rows.length + ' event' + (rows.length === 1 ? '' : 's');
   body.innerHTML =
-    '<div class="lg-totals"><span>Revenue <b>' + lgMoney(tRev) + '</b></span><span>Expenses <b>' + lgMoney(tExp) + '</b></span>' +
-    '<span>Margin <b class="' + (tRev - tExp >= 0 ? 'lg-margin-pos' : 'lg-margin-neg') + '">' + lgMoney(tRev - tExp) + '</b></span></div>' +
+    '<div class="lg-summary">' +
+      '<div class="lg-stat"><span class="lg-stat-label">Revenue</span><span class="lg-stat-val">' + lgMoney(tRev) + '</span><span class="lg-stat-sub">' + evCount + '</span></div>' +
+      '<div class="lg-stat"><span class="lg-stat-label">Expenses</span><span class="lg-stat-val">' + lgMoney(tExp) + '</span><span class="lg-stat-sub">booth · travel · stay · other</span></div>' +
+      '<div class="lg-stat net"><span class="lg-stat-label">Net margin</span><span class="lg-stat-val ' + (net >= 0 ? 'lg-margin-pos' : 'lg-margin-neg') + '">' + lgMoney(net) + '</span><span class="lg-stat-sub">' + pct + '% of revenue</span></div>' +
+    '</div>' +
     (d.sourceOk ? '' : '<div class="lg-empty" style="padding:0 0 10px">⚠ ZollTool not connected — revenue shows as 0. Connect it in Settings.</div>') +
-    '<table class="lg-table"><thead><tr><th>Event</th><th>Date</th><th class="lg-num">Revenue</th><th class="lg-num">Expenses</th><th class="lg-num">Margin</th></tr></thead><tbody>' + trs + '</tbody></table>';
+    '<div class="lg-table-wrap"><table class="lg-table"><thead><tr><th>Event</th><th>Date</th><th class="lg-num">Revenue</th><th class="lg-num">Expenses</th><th class="lg-num">Margin</th><th></th></tr></thead><tbody>' + trs + '</tbody></table></div>';
 }
 
 async function ledgerOpenEvent(eventId, name, country) {
