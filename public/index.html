@@ -2657,7 +2657,7 @@ async function submitLogin(e) {
     document.getElementById('loginPassword').value = '';
     document.getElementById('loginCode').value = '';
     document.getElementById('loginCodeField').style.display = 'none';
-    onAuthenticated(d.user);
+    window.features = d.features || window.features || {}; onAuthenticated(d.user);
   } catch { msg.textContent = 'Server unreachable.'; }
   return false;
 }
@@ -2721,7 +2721,7 @@ async function boot() {
   } catch { /* backend unreachable — fall through to login */ }
   try {
     const res = await fetch('/api/auth/me');
-    if (res.ok) { onAuthenticated((await res.json()).user); return; }
+    if (res.ok) { const me = await res.json(); window.features = me.features || {}; onAuthenticated(me.user); return; }
   } catch { /* fall through to login */ }
   showLogin();
 }
@@ -2758,7 +2758,7 @@ async function submitSetup(e) {
     const d = await res.json();
     if (!res.ok) { msg.className = 'form-msg bad'; msg.textContent = d.error || 'Setup failed'; return false; }
     document.getElementById('setupOverlay').style.display = 'none';
-    onAuthenticated(d.user);
+    window.features = d.features || window.features || {}; onAuthenticated(d.user);
   } catch { msg.className = 'form-msg bad'; msg.textContent = 'Server unreachable.'; }
   finally { btn.disabled = false; btn.textContent = original; }
   return false;
@@ -2843,6 +2843,58 @@ const lgCatLabel = (id) => (LG_CATS.find((c) => c.id === id) || { label: id }).l
 const lgEsc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const lgMoney = (n, cur) => (Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + (cur ? ' ' + cur : '');
 function lgMsg(t) { const m = document.getElementById('ledgerMsg'); if (m) m.textContent = t || ''; }
+const lgAiOn = () => !!(window.features && window.features.invoiceScan);
+const fileToB64 = (file) => new Promise((res) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result).split(',')[1] || ''); rd.readAsDataURL(file); });
+
+// Upload a PDF → Claude extracts the fields → auto-match an event → prefill the
+// Add-expense form. `presetEventId` is set when scanning from inside an event;
+// from the P&L overview it's null and we open whichever event the scan matched.
+async function lgScanInvoice(presetEventId) {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = 'application/pdf';
+  input.onchange = async () => {
+    const file = input.files && input.files[0]; if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { lgMsg('That PDF is too large (max 5 MB).'); return; }
+    lgMsg('Reading the invoice… this can take a few seconds.');
+    const b64 = await fileToB64(file);
+    let d;
+    try {
+      const r = await fetch('/api/ledger/parse', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ base64: b64, filename: file.name }) });
+      d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Scan failed.');
+    } catch (e) { lgMsg('✗ ' + (e.message || 'Scan failed.')); return; }
+    // Hold the PDF so it can be attached to the expense once the user saves.
+    window._lgScan = { base64: b64, filename: file.name, fields: d.fields, applied: false };
+    const target = presetEventId || (d.match && d.match.eventId);
+    if (target) {
+      const row = (window._lgPnlRows || []).find((x) => x.eventId === target) || {};
+      const name = row.name || (d.match && d.match.name) || d.fields.vendor || 'Event';
+      const country = row.country || d.fields.country || '';
+      await ledgerOpenEvent(target, name, country); // prefills via lgApplyScan()
+    } else {
+      const names = (d.candidates || []).map((c) => c.name).filter(Boolean).join(', ');
+      lgMsg(names
+        ? 'Couldn’t auto-match with confidence. Open the likely event (' + names + ') and the form will be prefilled.'
+        : 'Read the invoice, but couldn’t match an event — open the right event and the form will be prefilled.');
+    }
+  };
+  input.click();
+}
+
+// Push the held scan into the Add-expense inputs (called after the form renders).
+function lgApplyScan() {
+  const sc = window._lgScan; if (!sc || !sc.fields || sc.applied) return;
+  sc.applied = true;
+  const f = sc.fields;
+  const set = (id, v) => { const el = document.getElementById(id); if (el && v !== '' && v != null) el.value = v; };
+  set('lg_cat', f.category); lgCatChanged();
+  if (f.amount > 0) set('lg_amt', f.amount);
+  set('lg_cur', f.currency);
+  set('lg_date', f.date);
+  set('lg_vendor', f.vendor);
+  const conf = Math.round((f.confidence || 0) * 100);
+  lgMsg('Prefilled from ' + (sc.filename || 'PDF') + ' — check the amount & date, then Add.' + (conf ? ' (' + conf + '% confident)' : ''));
+}
 
 function openLedger() { document.getElementById('ledgerOverlay').style.display = 'block'; ledgerShowPnl(); }
 function closeLedger() { document.getElementById('ledgerOverlay').style.display = 'none'; setActiveNav('home'); }
@@ -2870,10 +2922,15 @@ async function ledgerShowPnl() {
       '<td class="lg-num ' + mCls + '">' + lgMoney(r.margin, cur) + '</td>' +
       '<td class="lg-go">›</td></tr>';
   }).join('');
+  window._lgPnlRows = rows;
   const net = tRev - tExp;
   const pct = tRev ? Math.round((net / tRev) * 100) : 0;
   const evCount = rows.length + ' event' + (rows.length === 1 ? '' : 's');
+  const scanBar = lgAiOn()
+    ? '<div style="display:flex;justify-content:flex-end;margin-bottom:10px"><button class="icon-btn" onclick="lgScanInvoice(null)">📄 Scan invoice PDF</button></div>'
+    : '';
   body.innerHTML =
+    scanBar +
     '<div class="lg-summary">' +
       '<div class="lg-stat"><span class="lg-stat-label">Revenue</span><span class="lg-stat-val">' + lgMoney(tRev) + '</span><span class="lg-stat-sub">' + evCount + '</span></div>' +
       '<div class="lg-stat"><span class="lg-stat-label">Expenses</span><span class="lg-stat-val">' + lgMoney(tExp) + '</span><span class="lg-stat-sub">booth · travel · stay · other</span></div>' +
@@ -2894,9 +2951,12 @@ async function ledgerOpenEvent(eventId, name, country) {
   const exps = d.expenses || [];
   const list = exps.length ? exps.map(lgExpenseRow).join('') : '<div class="lg-empty">No expenses yet for this event.</div>';
   const catOpts = LG_CATS.map((c) => '<option value="' + c.id + '">' + lgEsc(c.label) + '</option>').join('');
+  const scanBtn = lgAiOn()
+    ? '<button class="icon-btn" style="font-size:.66rem;padding:4px 9px;margin-left:auto" onclick="lgScanInvoice(' + "'" + lgEsc(eventId) + "'" + ')">📄 Scan PDF</button>'
+    : '';
   body.innerHTML =
     '<div class="lg-card">' + list + '</div>' +
-    '<div class="lg-card"><b style="font-size:.85rem">Add expense</b>' +
+    '<div class="lg-card"><div style="display:flex;align-items:center;gap:10px"><b style="font-size:.85rem">Add expense</b>' + scanBtn + '</div>' +
     '<div class="lg-form">' +
     '<div><label>Category</label><select id="lg_cat" onchange="lgCatChanged()">' + catOpts + '</select></div>' +
     '<div><label>Amount</label><input id="lg_amt" type="number" step="0.01" inputmode="decimal"></div>' +
@@ -2906,6 +2966,7 @@ async function ledgerOpenEvent(eventId, name, country) {
     '</div><div style="margin-top:10px"><button class="btn-primary" onclick="lgAddExpense()">Add expense</button></div></div>';
   const today = new Date().toISOString().slice(0, 10);
   const dt = document.getElementById('lg_date'); if (dt) dt.value = today;
+  lgApplyScan(); // if a scanned PDF is pending, overwrite the defaults with its data
 }
 
 function lgExpenseRow(e) {
@@ -2941,8 +3002,17 @@ async function lgAddExpense() {
   if (body.category === 'other' && !body.vendor.trim()) { lgMsg('Add a description for “Other”.'); return; }
   lgMsg('Saving…');
   const r = await fetch('/api/ledger/expenses', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-  lgMsg(r.ok ? 'Added ✓' : 'Save failed');
-  if (r.ok) ledgerOpenEvent(ev.eventId, ev.name, ev.country);
+  const jr = await r.json().catch(() => ({}));
+  if (!r.ok) { lgMsg('Save failed'); return; }
+  // If this expense was prefilled from a scanned PDF, attach that PDF to it.
+  const sc = window._lgScan;
+  if (sc && sc.base64 && jr.expense && jr.expense.id) {
+    lgMsg('Attaching invoice…');
+    await fetch('/api/ledger/expenses/' + encodeURIComponent(jr.expense.id) + '/invoice', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ base64: sc.base64, filename: sc.filename }) }).catch(() => {});
+  }
+  window._lgScan = null;
+  lgMsg('Added ✓');
+  ledgerOpenEvent(ev.eventId, ev.name, ev.country);
 }
 function lgCatChanged() {
   const other = document.getElementById('lg_cat').value === 'other';

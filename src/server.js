@@ -32,6 +32,8 @@ import {
   saveInvoice, readInvoice, computePnl,
 } from './ledger.js';
 import { rateLimit } from './rate-limit.js';
+import { aiConfig, aiEnabled, parseInvoicePdf, matchEvent } from './invoice-ai.js';
+import { aiQuota, aiRecord } from './ai-usage.js';
 import { createSession, getSession, touchSession, revokeSession, revokeAllForUser, listForUser, listAll } from './sessions.js';
 import { parseDevice, lookupGeo, geoEnabled } from './geo.js';
 import { generateSecret, otpauthUri, verifyToken, generateRecoveryCodes, hashRecovery } from './totp.js';
@@ -59,6 +61,10 @@ const MAX_BODY = Number(process.env.ZOLLTAX_MAX_BODY || 8 * 1024 * 1024);
 const GLOBAL_MAX = Number(process.env.ZOLLTAX_RATE_MAX || 300);
 const AUTH_MAX = Number(process.env.ZOLLTAX_AUTH_RATE_MAX || 15);
 const RATE_WINDOW = 60 * 1000;
+// Invoice scanning (Claude): opt-in per deployment via ANTHROPIC_API_KEY. A
+// tight per-IP burst cap sits on top of the persistent daily spend guard.
+const PARSE_ENABLED = aiEnabled();
+const PARSE_RATE_MAX = Number(process.env.ZOLLTAX_AI_RATE_MAX || 8);
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -241,6 +247,30 @@ const routes = {
     const rows = computePnl(events, revenueByEvent, expenses)
       .sort((a, b) => (b.start || '').localeCompare(a.start || ''));
     return { rows, sourceOk: clients.zoll.configured };
+  },
+
+  // Scan an invoice PDF with Claude → prefill fields + auto-match an event.
+  // Cost is bounded three ways: a PDF size cap, a per-IP burst limit, and the
+  // persistent daily call/token quota (ai-usage.js) — the hard bill ceiling.
+  'POST /api/ledger/parse': async ({ body, clients, ip }) => {
+    if (!PARSE_ENABLED) throw new HttpError(503, 'Invoice scanning is not enabled on this server.');
+    const cfg = aiConfig();
+    const base64 = String((body && body.base64) || '');
+    if (!base64) throw new HttpError(400, 'No PDF provided.');
+    const approxBytes = Math.floor((base64.length * 3) / 4);
+    if (approxBytes > cfg.maxPdfBytes) {
+      throw new HttpError(413, `PDF too large (max ${Math.round(cfg.maxPdfBytes / 1024 / 1024)} MB).`);
+    }
+    const burst = rateLimit(`ai:${ip}`, PARSE_RATE_MAX, RATE_WINDOW);
+    if (!burst.ok) throw new HttpError(429, 'Too many scans — wait a moment and try again.');
+    if (!aiQuota().ok) throw new HttpError(429, 'The daily invoice-scan limit has been reached. Try again tomorrow.');
+    const { fields, usage } = await parseInvoicePdf(base64, cfg);
+    aiRecord(usage); // count real token spend against today's budget
+    let events = [];
+    try { events = await clients.zoll.getEvents(); } catch { /* no ZollTool → skip matching */ }
+    const { match, candidates } = matchEvent(fields, events);
+    const q = aiQuota();
+    return { fields, match, candidates, remainingToday: q.remainingCalls };
   },
 
   'GET /api/mypos/accounts': async ({ clients }) => ({
@@ -582,7 +612,7 @@ const server = createServer(async (req, res) => {
         return send(res, 400, { error: e.message });
       }
       await startSession(req, res, user.id);
-      return send(res, 200, { user });
+      return send(res, 200, { user, features: { invoiceScan: PARSE_ENABLED } });
     }
 
     // Public auth endpoints.
@@ -605,7 +635,7 @@ const server = createServer(async (req, res) => {
         }
       }
       await startSession(req, res, user.id);
-      return send(res, 200, { user });
+      return send(res, 200, { user, features: { invoiceScan: PARSE_ENABLED } });
     }
     if (method === 'POST' && path === '/api/auth/logout') {
       const sess = currentSession(req);
@@ -617,7 +647,7 @@ const server = createServer(async (req, res) => {
       const sess = currentSession(req);
       const user = sess ? getUser(sess.userId) : null;
       if (!user) return send(res, 401, { error: 'Not authenticated' });
-      return send(res, 200, { user, twoFactor: has2fa(user.id) });
+      return send(res, 200, { user, twoFactor: has2fa(user.id), features: { invoiceScan: PARSE_ENABLED } });
     }
 
     // Everything else requires a valid server-side session.
@@ -629,7 +659,7 @@ const server = createServer(async (req, res) => {
       return send(res, 401, { error: 'Not authenticated' });
     }
     touchSession(sess.id);
-    const ctx = { url, body, user, sessionId: sess.id, clients: getTenantClients(user.id) };
+    const ctx = { url, body, user, sessionId: sess.id, ip, clients: getTenantClients(user.id) };
 
     // Ledger invoice PDF download (binary — bypasses the JSON senders).
     const invM = /^\/api\/ledger\/expenses\/([^/]+)\/invoice$/.exec(path);
