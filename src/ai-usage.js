@@ -1,10 +1,11 @@
 /**
  * Persistent daily spend guard for the invoice reader — the real bill cap.
  *
- * A single JSON counter in the data dir (0600) tracks calls + tokens for the
- * current UTC day and resets at midnight. Unlike the in-memory rate limiter this
- * survives restarts, so a crash-loop or a busy day can't quietly run up the
- * Anthropic bill. Env: ZOLLTAX_AI_DAILY_CALLS, ZOLLTAX_AI_DAILY_TOKENS.
+ * One JSON file in the data dir (0600) holds a per-tenant { day, calls, tokens }
+ * counter that resets at each UTC midnight. Unlike the in-memory rate limiter
+ * this survives restarts, so a crash-loop or a busy day can't quietly run up the
+ * Anthropic bill. Limits are the tenant's own (configurable in Settings), passed
+ * in by the caller.
  */
 import { mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
@@ -13,47 +14,48 @@ import { DATA_DIR } from './store.js';
 const FILE = join(DATA_DIR, 'ai-usage.json');
 const dayOf = (now) => new Date(now).toISOString().slice(0, 10);
 
-export function aiLimits(env = process.env) {
-  return {
-    dailyCalls: Number(env.ZOLLTAX_AI_DAILY_CALLS || 100),
-    dailyTokens: Number(env.ZOLLTAX_AI_DAILY_TOKENS || 2_000_000),
-  };
+function readAll() {
+  try {
+    const o = JSON.parse(readFileSync(FILE, 'utf8'));
+    return o && typeof o === 'object' ? o : {};
+  } catch {
+    return {};
+  }
 }
-
-function read(now) {
-  let o;
-  try { o = JSON.parse(readFileSync(FILE, 'utf8')); } catch { o = {}; }
-  if (o.day !== dayOf(now)) return { day: dayOf(now), calls: 0, tokens: 0 };
-  return { day: o.day, calls: Number(o.calls) || 0, tokens: Number(o.tokens) || 0 };
-}
-function write(o) {
+function writeAll(map) {
   mkdirSync(DATA_DIR, { recursive: true });
   const tmp = `${FILE}.${process.pid}.tmp`;
-  writeFileSync(tmp, JSON.stringify(o), { mode: 0o600 });
+  writeFileSync(tmp, JSON.stringify(map), { mode: 0o600 });
   renameSync(tmp, FILE);
 }
+function entry(map, userId, now) {
+  const e = map[userId];
+  if (!e || e.day !== dayOf(now)) return { day: dayOf(now), calls: 0, tokens: 0 };
+  return { day: e.day, calls: Number(e.calls) || 0, tokens: Number(e.tokens) || 0 };
+}
 
-/** Remaining budget for today. Read-only — does not consume. */
-export function aiQuota(env = process.env, now = Date.now()) {
-  const lim = aiLimits(env);
-  const u = read(now);
-  const remainingCalls = Math.max(0, lim.dailyCalls - u.calls);
-  const remainingTokens = Math.max(0, lim.dailyTokens - u.tokens);
+/** Remaining budget for this tenant today. Read-only — does not consume. */
+export function aiQuota(userId, limits, now = Date.now()) {
+  const u = entry(readAll(), userId, now);
+  const remainingCalls = Math.max(0, limits.dailyCalls - u.calls);
+  const remainingTokens = Math.max(0, limits.dailyTokens - u.tokens);
   return {
     ok: remainingCalls > 0 && remainingTokens > 0,
     remainingCalls,
     remainingTokens,
-    dailyCalls: lim.dailyCalls,
-    dailyTokens: lim.dailyTokens,
+    dailyCalls: limits.dailyCalls,
+    dailyTokens: limits.dailyTokens,
     day: u.day,
   };
 }
 
-/** Record one completed call's token usage. Returns the updated day totals. */
-export function aiRecord(usage, now = Date.now()) {
-  const u = read(now);
+/** Record one completed call's token usage against this tenant. */
+export function aiRecord(userId, usage, now = Date.now()) {
+  const map = readAll();
+  const u = entry(map, userId, now);
   u.calls += 1;
   u.tokens += (Number(usage && usage.inputTokens) || 0) + (Number(usage && usage.outputTokens) || 0);
-  write(u);
+  map[userId] = u;
+  writeAll(map);
   return u;
 }

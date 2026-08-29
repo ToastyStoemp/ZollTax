@@ -41,6 +41,17 @@ export const CONFIG_GROUPS = [
     ],
   },
   {
+    id: 'ai',
+    label: 'Invoice scanning (AI)',
+    hint: 'Reads an uploaded invoice PDF to prefill a ledger expense and auto-match its event. Uses the Anthropic API — the PDF is sent to Anthropic when you scan one. The daily caps below bound the cost; leave a field blank for its default.',
+    fields: [
+      { key: 'ANTHROPIC_API_KEY', label: 'Anthropic API key', secret: true, placeholder: 'sk-ant-…' },
+      { key: 'ZOLLTAX_AI_MODEL', label: 'Model', placeholder: 'claude-haiku-4-5', hint: 'Cheap + capable default. Change only if you know the model id.' },
+      { key: 'ZOLLTAX_AI_DAILY_CALLS', label: 'Daily scan limit', placeholder: '100', hint: 'Hard cap on scans per day — the main bill guard.' },
+      { key: 'ZOLLTAX_AI_DAILY_TOKENS', label: 'Daily token limit', placeholder: '2000000', hint: 'Secondary daily cap on total tokens used.' },
+    ],
+  },
+  {
     id: 'mypos',
     label: 'myPOS Banking API',
     hint: 'Verifies clusters against live settled data. From the myPOS Partner Portal.',

@@ -52,5 +52,17 @@ function buildClients(userId, cfg) {
       apiUrl: (env.LEXWARE_API_URL || 'https://api.lexoffice.io/v1').replace(/\/+$/, ''),
       feeCategory: env.LEXWARE_FEE_CATEGORY || '',
     },
+    // Invoice-scanning (Claude). `configured` gates the feature; daily caps are
+    // tenant-tunable, operational knobs (token/pdf/timeout) keep fixed defaults.
+    ai: {
+      apiKey: env.ANTHROPIC_API_KEY || '',
+      model: env.ZOLLTAX_AI_MODEL || 'claude-haiku-4-5',
+      dailyCalls: Number(env.ZOLLTAX_AI_DAILY_CALLS) || 100,
+      dailyTokens: Number(env.ZOLLTAX_AI_DAILY_TOKENS) || 2_000_000,
+      maxTokens: 1024,
+      maxPdfBytes: 5 * 1024 * 1024,
+      timeoutMs: 25_000,
+      get configured() { return !!this.apiKey; },
+    },
   };
 }

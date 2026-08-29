@@ -42,22 +42,20 @@ test('matchEvent stays unmatched when only country matches (no dates)', () => {
   assert.equal(candidates[0].eventId, 'e2'); // still surfaced as a candidate
 });
 
-test('daily quota guard blocks once the call cap is spent', async () => {
+test('daily quota guard blocks once the call cap is spent, per tenant', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'zolltax-ai-'));
   process.env.ZOLLTAX_DATA_DIR = dir;
-  process.env.ZOLLTAX_AI_DAILY_CALLS = '2';
-  process.env.ZOLLTAX_AI_DAILY_TOKENS = '1000000';
+  const limits = { dailyCalls: 2, dailyTokens: 1_000_000 };
   try {
     const { aiQuota, aiRecord } = await import('../src/ai-usage.js?fresh=' + Date.now());
-    assert.equal(aiQuota().ok, true);
-    aiRecord({ inputTokens: 10, outputTokens: 5 });
-    assert.equal(aiQuota().remainingCalls, 1);
-    aiRecord({ inputTokens: 10, outputTokens: 5 });
-    assert.equal(aiQuota().ok, false); // cap reached
+    assert.equal(aiQuota('u1', limits).ok, true);
+    aiRecord('u1', { inputTokens: 10, outputTokens: 5 });
+    assert.equal(aiQuota('u1', limits).remainingCalls, 1);
+    aiRecord('u1', { inputTokens: 10, outputTokens: 5 });
+    assert.equal(aiQuota('u1', limits).ok, false); // u1 cap reached
+    assert.equal(aiQuota('u2', limits).ok, true); // a different tenant is unaffected
   } finally {
     rmSync(dir, { recursive: true, force: true });
     delete process.env.ZOLLTAX_DATA_DIR;
-    delete process.env.ZOLLTAX_AI_DAILY_CALLS;
-    delete process.env.ZOLLTAX_AI_DAILY_TOKENS;
   }
 });

@@ -32,7 +32,7 @@ import {
   saveInvoice, readInvoice, computePnl,
 } from './ledger.js';
 import { rateLimit } from './rate-limit.js';
-import { aiConfig, aiEnabled, parseInvoicePdf, matchEvent } from './invoice-ai.js';
+import { parseInvoicePdf, matchEvent, pingAiKey } from './invoice-ai.js';
 import { aiQuota, aiRecord } from './ai-usage.js';
 import { createSession, getSession, touchSession, revokeSession, revokeAllForUser, listForUser, listAll } from './sessions.js';
 import { parseDevice, lookupGeo, geoEnabled } from './geo.js';
@@ -61,9 +61,8 @@ const MAX_BODY = Number(process.env.ZOLLTAX_MAX_BODY || 8 * 1024 * 1024);
 const GLOBAL_MAX = Number(process.env.ZOLLTAX_RATE_MAX || 300);
 const AUTH_MAX = Number(process.env.ZOLLTAX_AUTH_RATE_MAX || 15);
 const RATE_WINDOW = 60 * 1000;
-// Invoice scanning (Claude): opt-in per deployment via ANTHROPIC_API_KEY. A
-// tight per-IP burst cap sits on top of the persistent daily spend guard.
-const PARSE_ENABLED = aiEnabled();
+// Invoice scanning (Claude): opt-in per tenant via a key in Settings. A tight
+// per-user burst cap sits on top of the persistent daily spend guard.
 const PARSE_RATE_MAX = Number(process.env.ZOLLTAX_AI_RATE_MAX || 8);
 
 const MIME = {
@@ -252,25 +251,25 @@ const routes = {
   // Scan an invoice PDF with Claude → prefill fields + auto-match an event.
   // Cost is bounded three ways: a PDF size cap, a per-IP burst limit, and the
   // persistent daily call/token quota (ai-usage.js) — the hard bill ceiling.
-  'POST /api/ledger/parse': async ({ body, clients, ip }) => {
-    if (!PARSE_ENABLED) throw new HttpError(503, 'Invoice scanning is not enabled on this server.');
-    const cfg = aiConfig();
+  'POST /api/ledger/parse': async ({ user, body, clients }) => {
+    const ai = clients.ai;
+    if (!ai.configured) throw new HttpError(503, 'Invoice scanning is off — add an Anthropic API key in Settings → Invoice scanning.');
     const base64 = String((body && body.base64) || '');
     if (!base64) throw new HttpError(400, 'No PDF provided.');
     const approxBytes = Math.floor((base64.length * 3) / 4);
-    if (approxBytes > cfg.maxPdfBytes) {
-      throw new HttpError(413, `PDF too large (max ${Math.round(cfg.maxPdfBytes / 1024 / 1024)} MB).`);
+    if (approxBytes > ai.maxPdfBytes) {
+      throw new HttpError(413, `PDF too large (max ${Math.round(ai.maxPdfBytes / 1024 / 1024)} MB).`);
     }
-    const burst = rateLimit(`ai:${ip}`, PARSE_RATE_MAX, RATE_WINDOW);
+    const burst = rateLimit(`ai:${user.id}`, PARSE_RATE_MAX, RATE_WINDOW);
     if (!burst.ok) throw new HttpError(429, 'Too many scans — wait a moment and try again.');
-    if (!aiQuota().ok) throw new HttpError(429, 'The daily invoice-scan limit has been reached. Try again tomorrow.');
-    const { fields, usage } = await parseInvoicePdf(base64, cfg);
-    aiRecord(usage); // count real token spend against today's budget
+    const limits = { dailyCalls: ai.dailyCalls, dailyTokens: ai.dailyTokens };
+    if (!aiQuota(user.id, limits).ok) throw new HttpError(429, 'The daily invoice-scan limit has been reached. Try again tomorrow.');
+    const { fields, usage } = await parseInvoicePdf(base64, ai);
+    aiRecord(user.id, usage); // count real token spend against today's budget
     let events = [];
     try { events = await clients.zoll.getEvents(); } catch { /* no ZollTool → skip matching */ }
     const { match, candidates } = matchEvent(fields, events);
-    const q = aiQuota();
-    return { fields, match, candidates, remainingToday: q.remainingCalls };
+    return { fields, match, candidates, remainingToday: aiQuota(user.id, limits).remainingCalls };
   },
 
   'GET /api/mypos/accounts': async ({ clients }) => ({
@@ -465,6 +464,11 @@ async function testConnection(clients, group) {
         await clients.zoll.connect();
         return { ok: true, detail: 'ZollTool read API reachable.' };
       }
+      case 'ai': {
+        if (!clients.ai.configured) return { ok: false, detail: 'No API key set.' };
+        const p = await pingAiKey(clients.ai.apiKey);
+        return p.ok ? { ok: true, detail: `API key valid — using ${clients.ai.model}.` } : { ok: false, detail: p.detail || 'Key check failed.' };
+      }
       case 'mypos': {
         if (clients.mypos.mode !== 'live') return { ok: false, detail: 'Missing myPOS credentials.' };
         const gw = String(clients.mypos.config?.gatewayUrl || '').replace(/^https?:\/\//, '') || '(none)';
@@ -612,7 +616,7 @@ const server = createServer(async (req, res) => {
         return send(res, 400, { error: e.message });
       }
       await startSession(req, res, user.id);
-      return send(res, 200, { user, features: { invoiceScan: PARSE_ENABLED } });
+      return send(res, 200, { user, features: { invoiceScan: getTenantClients(user.id).ai.configured } });
     }
 
     // Public auth endpoints.
@@ -635,7 +639,7 @@ const server = createServer(async (req, res) => {
         }
       }
       await startSession(req, res, user.id);
-      return send(res, 200, { user, features: { invoiceScan: PARSE_ENABLED } });
+      return send(res, 200, { user, features: { invoiceScan: getTenantClients(user.id).ai.configured } });
     }
     if (method === 'POST' && path === '/api/auth/logout') {
       const sess = currentSession(req);
@@ -647,7 +651,7 @@ const server = createServer(async (req, res) => {
       const sess = currentSession(req);
       const user = sess ? getUser(sess.userId) : null;
       if (!user) return send(res, 401, { error: 'Not authenticated' });
-      return send(res, 200, { user, twoFactor: has2fa(user.id), features: { invoiceScan: PARSE_ENABLED } });
+      return send(res, 200, { user, twoFactor: has2fa(user.id), features: { invoiceScan: getTenantClients(user.id).ai.configured } });
     }
 
     // Everything else requires a valid server-side session.

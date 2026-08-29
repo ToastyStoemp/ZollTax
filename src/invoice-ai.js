@@ -6,23 +6,34 @@
  * OCR on scans). Cost is bounded upstream by ai-usage.js (persistent daily caps)
  * and here by a cheap model + a small max_tokens ceiling + a PDF size cap.
  *
- * Enabled only when ANTHROPIC_API_KEY is set, so the feature is opt-in per
- * deployment. Invoice PDFs are sent to Anthropic when a user scans one — a
- * conscious privacy trade the operator makes by configuring the key.
+ * Enabled per tenant by saving an Anthropic API key in Settings → Invoice
+ * scanning (stored encrypted like every other integration). Invoice PDFs are
+ * sent to Anthropic when a user scans one — a conscious privacy trade the
+ * operator makes by configuring the key.
  */
 
 const API_URL = 'https://api.anthropic.com/v1/messages';
+const MODELS_URL = 'https://api.anthropic.com/v1/models?limit=1';
 
-export function aiConfig(env = process.env) {
-  return {
-    apiKey: env.ANTHROPIC_API_KEY || '',
-    model: env.ZOLLTAX_AI_MODEL || 'claude-haiku-4-5',
-    maxTokens: Number(env.ZOLLTAX_AI_MAX_TOKENS || 1024),
-    maxPdfBytes: Number(env.ZOLLTAX_AI_MAX_PDF || 5 * 1024 * 1024),
-    timeoutMs: Number(env.ZOLLTAX_AI_TIMEOUT_MS || 25_000),
-  };
+/** Cheap validity check for the Settings "Test" button — lists models (no token spend). */
+export async function pingAiKey(apiKey, timeoutMs = 8000) {
+  if (!apiKey) return { ok: false, detail: 'No API key set.' };
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await fetch(MODELS_URL, {
+      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      signal: ctrl.signal,
+    });
+    if (r.status === 200) return { ok: true };
+    if (r.status === 401) return { ok: false, detail: 'Key rejected (401).' };
+    return { ok: false, detail: `Anthropic returned ${r.status}.` };
+  } catch (e) {
+    return { ok: false, detail: e && e.name === 'AbortError' ? 'Timed out.' : 'Could not reach Anthropic.' };
+  } finally {
+    clearTimeout(timer);
+  }
 }
-export const aiEnabled = (env = process.env) => !!aiConfig(env).apiKey;
 
 const PROMPT = `You are extracting expense data from a single invoice or receipt PDF — a business cost for a market/convention vendor (hotel, travel, booth/stand fee, or other).
 Return ONLY a JSON object, no prose, with exactly these keys:
@@ -39,8 +50,9 @@ Return ONLY a JSON object, no prose, with exactly these keys:
 }
 Rules: use the final grand total (never a subtotal or a per-night rate). If several dates appear, "date" is the invoice date and stayStart/stayEnd are the accommodation nights. Category is "accommodation" for hotels, "travel" for flights/trains/fuel/taxi/parking, "booth" for stand/table/exhibitor fees, otherwise "other".`;
 
-/** Call Claude to read one PDF. Returns { fields, usage:{inputTokens,outputTokens} }. */
-export async function parseInvoicePdf(base64, cfg = aiConfig()) {
+/** Call Claude to read one PDF. `cfg` is the tenant's ai client (apiKey, model,
+ * maxTokens, timeoutMs). Returns { fields, usage:{inputTokens,outputTokens} }. */
+export async function parseInvoicePdf(base64, cfg) {
   const payload = {
     model: cfg.model,
     max_tokens: cfg.maxTokens,
