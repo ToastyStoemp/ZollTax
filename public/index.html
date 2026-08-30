@@ -625,7 +625,7 @@ h1 span{color:var(--accent)}
       </div>
     </div>
     <p class="modal-sub">Per-event profit &amp; loss. Revenue is pulled live from ZollTool; add booth, travel, accommodation and other costs — attach the invoice PDF now or later. Booking to Lexware happens at month-end.</p>
-    <div id="ledgerBody"><div class="lg-empty">Loading…</div></div>
+    <div id="ledgerBody"><div class="zui-empty">Loading…</div></div>
   </div>
 </div>
 
@@ -2905,23 +2905,23 @@ async function ledgerShowPnl() {
   document.getElementById('ledgerBackBtn').style.display = 'none';
   document.getElementById('ledgerTitle').textContent = 'Ledger';
   const body = document.getElementById('ledgerBody');
-  body.innerHTML = '<div class="lg-empty">Loading P&amp;L…</div>';
+  body.innerHTML = '<div class="zui-empty">Loading P&amp;L…</div>';
   let d;
-  try { d = await fetch('/api/ledger/pnl').then((r) => r.json()); } catch { body.innerHTML = '<div class="lg-empty">Could not load the ledger.</div>'; return; }
+  try { d = await fetch('/api/ledger/pnl').then((r) => r.json()); } catch { body.innerHTML = '<div class="zui-empty">Could not load the ledger.</div>'; return; }
   const rows = d.rows || [];
-  if (!rows.length) { body.innerHTML = '<div class="lg-empty">No events yet. Events come from ZollTool; add expenses once an event exists.</div>'; return; }
+  if (!rows.length) { body.innerHTML = '<div class="zui-empty">No events yet. Events come from ZollTool; add expenses once an event exists.</div>'; return; }
   let tRev = 0, tExp = 0;
   const trs = rows.map((r) => {
     tRev += r.revenue; tExp += r.expenses;
     const cur = r.currencies && r.currencies.length === 1 ? r.currencies[0] : '';
-    const mCls = r.margin >= 0 ? 'lg-margin-pos' : 'lg-margin-neg';
-    const badge = r.unbooked ? ` <span class="lg-badge">${r.unbooked} unbooked</span>` : '';
+    const mCls = r.margin >= 0 ? 'zui-pos' : 'zui-neg';
+    const badge = r.unbooked ? ` <span class="zui-badge zui-badge-warn">${r.unbooked} unbooked</span>` : '';
     return '<tr onclick="ledgerOpenEvent(' + "'" + lgEsc(r.eventId) + "','" + lgEsc(r.name).replace(/'/g, '&#39;') + "','" + lgEsc(r.country) + "'" + ')">' +
       '<td>' + lgEsc(r.name) + (r.country ? ' <span class="lg-exp-sub">· ' + lgEsc(r.country) + '</span>' : '') + '</td>' +
       '<td class="lg-exp-sub">' + lgEsc(r.start || '') + '</td>' +
-      '<td class="lg-num">' + lgMoney(r.revenue, cur) + '</td>' +
-      '<td class="lg-num">' + lgMoney(r.expenses, cur) + badge + '</td>' +
-      '<td class="lg-num ' + mCls + '">' + lgMoney(r.margin, cur) + '</td>' +
+      '<td class="zui-num">' + lgMoney(r.revenue, cur) + '</td>' +
+      '<td class="zui-num">' + lgMoney(r.expenses, cur) + badge + '</td>' +
+      '<td class="zui-num ' + mCls + '">' + lgMoney(r.margin, cur) + '</td>' +
       '<td class="lg-go">›</td></tr>';
   }).join('');
   window._lgPnlRows = rows;
@@ -2933,13 +2933,13 @@ async function ledgerShowPnl() {
     : '';
   body.innerHTML =
     scanBar +
-    '<div class="lg-summary">' +
-      '<div class="lg-stat"><span class="lg-stat-label">Revenue</span><span class="lg-stat-val">' + lgMoney(tRev) + '</span><span class="lg-stat-sub">' + evCount + '</span></div>' +
-      '<div class="lg-stat"><span class="lg-stat-label">Expenses</span><span class="lg-stat-val">' + lgMoney(tExp) + '</span><span class="lg-stat-sub">booth · travel · stay · other</span></div>' +
-      '<div class="lg-stat net"><span class="lg-stat-label">Net margin</span><span class="lg-stat-val ' + (net >= 0 ? 'lg-margin-pos' : 'lg-margin-neg') + '">' + lgMoney(net) + '</span><span class="lg-stat-sub">' + pct + '% of revenue</span></div>' +
+    '<div class="zui-stat-grid">' +
+      '<div class="zui-stat"><span class="zui-stat-label">Revenue</span><span class="zui-stat-value">' + lgMoney(tRev) + '</span><span class="zui-stat-sub">' + evCount + '</span></div>' +
+      '<div class="zui-stat"><span class="zui-stat-label">Expenses</span><span class="zui-stat-value">' + lgMoney(tExp) + '</span><span class="zui-stat-sub">booth · travel · stay · other</span></div>' +
+      '<div class="zui-stat net"><span class="zui-stat-label">Net margin</span><span class="zui-stat-value ' + (net >= 0 ? 'zui-pos' : 'zui-neg') + '">' + lgMoney(net) + '</span><span class="zui-stat-sub">' + pct + '% of revenue</span></div>' +
     '</div>' +
-    (d.sourceOk ? '' : '<div class="lg-empty" style="padding:0 0 10px">⚠ ZollTool not connected — revenue shows as 0. Connect it in Settings.</div>') +
-    '<div class="lg-table-wrap"><table class="lg-table"><thead><tr><th>Event</th><th>Date</th><th class="lg-num">Revenue</th><th class="lg-num">Expenses</th><th class="lg-num">Margin</th><th></th></tr></thead><tbody>' + trs + '</tbody></table></div>';
+    (d.sourceOk ? '' : '<div class="zui-empty" style="padding:0 0 10px">⚠ ZollTool not connected — revenue shows as 0. Connect it in Settings.</div>') +
+    '<div class="zui-table-wrap"><table class="zui-table"><thead><tr><th>Event</th><th>Date</th><th class="zui-num">Revenue</th><th class="zui-num">Expenses</th><th class="zui-num">Margin</th><th></th></tr></thead><tbody>' + trs + '</tbody></table></div>';
 }
 
 async function ledgerOpenEvent(eventId, name, country) {
@@ -2947,18 +2947,18 @@ async function ledgerOpenEvent(eventId, name, country) {
   document.getElementById('ledgerBackBtn').style.display = '';
   document.getElementById('ledgerTitle').textContent = name || 'Event';
   const body = document.getElementById('ledgerBody');
-  body.innerHTML = '<div class="lg-empty">Loading expenses…</div>';
+  body.innerHTML = '<div class="zui-empty">Loading expenses…</div>';
   let d;
-  try { d = await fetch('/api/ledger/expenses?eventId=' + encodeURIComponent(eventId)).then((r) => r.json()); } catch { body.innerHTML = '<div class="lg-empty">Could not load expenses.</div>'; return; }
+  try { d = await fetch('/api/ledger/expenses?eventId=' + encodeURIComponent(eventId)).then((r) => r.json()); } catch { body.innerHTML = '<div class="zui-empty">Could not load expenses.</div>'; return; }
   const exps = d.expenses || [];
-  const list = exps.length ? exps.map(lgExpenseRow).join('') : '<div class="lg-empty">No expenses yet for this event.</div>';
+  const list = exps.length ? exps.map(lgExpenseRow).join('') : '<div class="zui-empty">No expenses yet for this event.</div>';
   const catOpts = LG_CATS.map((c) => '<option value="' + c.id + '">' + lgEsc(c.label) + '</option>').join('');
   const scanBtn = lgAiOn()
     ? '<button class="icon-btn" style="font-size:.66rem;padding:4px 9px;margin-left:auto" onclick="lgScanInvoice(' + "'" + lgEsc(eventId) + "'" + ')">📄 Scan PDF</button>'
     : '';
   body.innerHTML =
-    '<div class="lg-card">' + list + '</div>' +
-    '<div class="lg-card"><div style="display:flex;align-items:center;gap:10px"><b style="font-size:.85rem">Add expense</b>' + scanBtn + '</div>' +
+    '<div class="zui-card">' + list + '</div>' +
+    '<div class="zui-card"><div style="display:flex;align-items:center;gap:10px"><b style="font-size:.85rem">Add expense</b>' + scanBtn + '</div>' +
     '<div class="lg-form">' +
     '<div><label>Category</label><select id="lg_cat" onchange="lgCatChanged()">' + catOpts + '</select></div>' +
     '<div><label>Amount</label><input id="lg_amt" type="number" step="0.01" inputmode="decimal"></div>' +
@@ -2973,8 +2973,8 @@ async function ledgerOpenEvent(eventId, name, country) {
 
 function lgExpenseRow(e) {
   const inv = e.invoice
-    ? '<a class="lg-linkbtn" href="/api/ledger/expenses/' + encodeURIComponent(e.id) + '/invoice" target="_blank">📎 ' + lgEsc(e.invoice.filename) + '</a>'
-    : '<button class="lg-linkbtn" onclick="lgPickInvoice(' + "'" + lgEsc(e.id) + "'" + ')">＋ attach PDF</button>';
+    ? '<a class="zui-link" href="/api/ledger/expenses/' + encodeURIComponent(e.id) + '/invoice" target="_blank">📎 ' + lgEsc(e.invoice.filename) + '</a>'
+    : '<button class="zui-link" onclick="lgPickInvoice(' + "'" + lgEsc(e.id) + "'" + ')">＋ attach PDF</button>';
   const booked = e.bookedVoucherId ? ' <span class="lg-exp-sub">· booked</span>' : '';
   // Description carries the specifics; the category label is the fallback so we
   // never show a redundant "(no vendor)" next to the category chip.
@@ -2984,10 +2984,10 @@ function lgExpenseRow(e) {
     '<span class="lg-cat ' + lgEsc(e.category) + '">' + lgEsc(lgCatLabel(e.category)) + '</span>' +
     '<div class="lg-exp-main"><div>' + primary + booked + '</div>' +
     (detail ? '<div class="lg-exp-sub">' + detail + '</div>' : '') +
-    '<span class="lg-num" style="font-weight:600">' + lgMoney(e.amount, e.currency) + '</span>' +
+    '<span class="zui-num" style="font-weight:600">' + lgMoney(e.amount, e.currency) + '</span>' +
     '<span>' + inv + '</span>' +
-    '<button class="lg-linkbtn" onclick="lgEditExpense(' + "'" + lgEsc(e.id) + "'" + ')">edit</button>' +
-    '<button class="lg-linkbtn danger" onclick="lgDeleteExpense(' + "'" + lgEsc(e.id) + "'" + ')">delete</button></div>';
+    '<button class="zui-link" onclick="lgEditExpense(' + "'" + lgEsc(e.id) + "'" + ')">edit</button>' +
+    '<button class="zui-link zui-link-danger" onclick="lgDeleteExpense(' + "'" + lgEsc(e.id) + "'" + ')">delete</button></div>';
 }
 
 async function lgAddExpense() {

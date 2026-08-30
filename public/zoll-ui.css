@@ -163,16 +163,17 @@
 /* ── Inputs ──────────────────────────────────────────────── */
 .zui-input, .zui-select {
   width: 100%;
-  background: var(--zui-surface-2);
-  border: 1px solid var(--zui-border-2);
+  background: var(--zui-surface-2); /* one step lighter than the card = visible without a border */
+  border: none;
   border-radius: var(--zui-r);
   color: var(--zui-text);
   font-family: var(--zui-font);
   font-size: var(--zui-fs-sm);
   padding: 8px 12px;
-  transition: border-color 0.15s;
+  transition: box-shadow 0.15s;
 }
-.zui-input:focus, .zui-select:focus { outline: none; border-color: var(--zui-accent); }
+/* Borderless at rest; a subtle accent ring only on focus. */
+.zui-input:focus, .zui-select:focus { outline: none; box-shadow: 0 0 0 1px var(--zui-accent); }
 /* No spinner on number inputs (matches ZollTool's bulk stock editor). */
 .zui-input[type='number']::-webkit-outer-spin-button,
 .zui-input[type='number']::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
