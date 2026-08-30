@@ -361,3 +361,13 @@
   border-radius: var(--zui-r-xl); padding: var(--zui-space-6); box-shadow: 0 22px 60px rgba(0, 0, 0, 0.6);
 }
 .zui-modal-head { display: flex; align-items: center; justify-content: space-between; gap: var(--zui-space-3); margin-bottom: var(--zui-space-4); }
+
+/* ── Reset normalization ─────────────────────────────────────
+ * Host apps carry different CSS resets — Tailwind sets line-height:1.5 on
+ * everything (buttons included), a bare reset leaves buttons at 'normal'. That
+ * makes identical components render at different heights. Pin line-height on the
+ * framework's interactive/text components so their box height is the same
+ * everywhere, independent of the host reset. */
+.zui-btn, .zui-icon-btn, .zui-back-btn, .zui-nav-item, .zui-pill,
+.zui-input, .zui-select, .zui-settings-card { line-height: 1.4; }
+.zui-settings-card-title, .zui-settings-card-desc { line-height: 1.4; }
