@@ -520,6 +520,7 @@ h1 span{color:var(--accent)}
   <div class="settings-inner">
     <div class="settings-head">
       <h2>Settings</h2>
+      <span id="settingsVersion" class="settings-head-actions" title="Deployed commit" style="font-size:.7rem;color:var(--muted2)"></span>
     </div>
     <p class="modal-sub">Manage your account, security, and the integrations that flow data in and out.</p>
     <div class="settings-cards">
@@ -2684,8 +2685,12 @@ function onAuthenticated(user) {
   document.getElementById('loginOverlay').style.display = 'none';
   document.getElementById('appShell').style.display = 'flex';
   document.getElementById('headerUserEmail').textContent = user.email;
-  const bv = document.getElementById('buildVersion');
-  if (bv && window.appVersion) bv.textContent = 'build ' + window.appVersion;
+  if (window.appVersion) {
+    const bv = document.getElementById('buildVersion');
+    if (bv) bv.textContent = 'build ' + window.appVersion;
+    const sv = document.getElementById('settingsVersion');
+    if (sv) sv.textContent = 'build ' + window.appVersion;
+  }
   navGo('home');
   loadBridge();
 }
