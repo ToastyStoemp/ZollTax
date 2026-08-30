@@ -4,15 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ZollTax</title>
+<!-- Shared visual framework — the single source of truth (see ZollDesign). -->
+<link rel="stylesheet" href="/zoll-ui.css">
 <style>
-/* Themed to match ZollTool: slate surfaces, emerald accent, system font. */
+/* Palette, type and radii come from ZollDesign's tokens (zoll-ui.css) so ZollTax
+   and ZollTool can't drift. Only app-specific extras (e.g. --accent2) live here. */
 :root {
-  --bg:#020617; --surface:#0f172a; --surface2:#1e293b; --surface3:#334155;
-  --border:#1e293b; --border2:#334155;
-  --accent:#34d399; --accent2:#38bdf8;
-  --green:#34d399; --red:#f87171; --orange:#fbbf24;
-  --text:#f1f5f9; --muted:#94a3b8; --muted2:#64748b;
-  --font:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --bg:var(--zui-bg,#020617); --surface:var(--zui-surface,#0f172a); --surface2:var(--zui-surface-2,#1e293b); --surface3:var(--zui-surface-3,#334155);
+  --border:var(--zui-border,#1e293b); --border2:var(--zui-border-2,#334155);
+  --accent:var(--zui-accent,#34d399); --accent2:#38bdf8;
+  --green:var(--zui-accent,#34d399); --red:var(--zui-danger,#f87171); --orange:var(--zui-warn,#fbbf24);
+  --text:var(--zui-text,#f1f5f9); --muted:var(--zui-muted,#94a3b8); --muted2:var(--zui-muted-2,#64748b);
+  --font:var(--zui-font,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh}
