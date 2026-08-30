@@ -1,7 +1,9 @@
 import './load-env.js'; // MUST be first: loads .env before modules read process.env
 import './load-env.js'; // side effect: load .env into process.env before anything reads it
 import { createServer } from 'node:http';
+import { execSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, extname, normalize as normPath } from 'node:path';
 import { LexwareClient, LexwareApiError, resolveCategoryId } from './lexware.js';
@@ -49,6 +51,26 @@ import { issueChallenge, verifyChallenge, SOLVER_JS } from './captcha.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, '..', 'public');
 const PORT = Number(process.env.PORT || 4000);
+// The commit this server is running, resolved at boot so a page maps 1:1 to a
+// deploy. Order: explicit env override → the file deploy.sh wrote into the data
+// volume (the container has no .git) → git directly (dev) → "dev". "-dirty"
+// flags uncommitted changes.
+const COMMIT_SHA = (() => {
+  if (process.env.ZOLLTAX_COMMIT_SHA) return process.env.ZOLLTAX_COMMIT_SHA;
+  try {
+    const f = readFileSync(join(process.env.ZOLLTAX_DATA_DIR || 'data', 'commit'), 'utf8').trim();
+    if (f) return f;
+  } catch {
+    /* no commit file — fall through to git (dev) */
+  }
+  try {
+    const sha = execSync('git rev-parse --short HEAD').toString().trim();
+    const dirty = execSync('git status --porcelain').toString().trim() ? '-dirty' : '';
+    return sha + dirty;
+  } catch {
+    return 'dev';
+  }
+})();
 const COOKIE = 'zt_sess';
 const SECURE_COOKIE = process.env.ZOLLTAX_SECURE_COOKIE === '1';
 // Trust X-Forwarded-For only when a reverse proxy actually fronts us — otherwise
@@ -616,7 +638,7 @@ const server = createServer(async (req, res) => {
         return send(res, 400, { error: e.message });
       }
       await startSession(req, res, user.id);
-      return send(res, 200, { user, features: { invoiceScan: getTenantClients(user.id).ai.configured } });
+      return send(res, 200, { user, features: { invoiceScan: getTenantClients(user.id).ai.configured }, version: COMMIT_SHA });
     }
 
     // Public auth endpoints.
@@ -639,7 +661,7 @@ const server = createServer(async (req, res) => {
         }
       }
       await startSession(req, res, user.id);
-      return send(res, 200, { user, features: { invoiceScan: getTenantClients(user.id).ai.configured } });
+      return send(res, 200, { user, features: { invoiceScan: getTenantClients(user.id).ai.configured }, version: COMMIT_SHA });
     }
     if (method === 'POST' && path === '/api/auth/logout') {
       const sess = currentSession(req);
@@ -651,7 +673,7 @@ const server = createServer(async (req, res) => {
       const sess = currentSession(req);
       const user = sess ? getUser(sess.userId) : null;
       if (!user) return send(res, 401, { error: 'Not authenticated' });
-      return send(res, 200, { user, twoFactor: has2fa(user.id), features: { invoiceScan: getTenantClients(user.id).ai.configured } });
+      return send(res, 200, { user, twoFactor: has2fa(user.id), features: { invoiceScan: getTenantClients(user.id).ai.configured }, version: COMMIT_SHA });
     }
 
     // Everything else requires a valid server-side session.

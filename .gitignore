@@ -13,4 +13,7 @@ data/sessions.json
 data/master.key
 # ZollLedger: per-tenant expenses + uploaded invoice PDFs
 data/ledger/
+# Runtime state: deployed-commit stamp + AI invoice-scan daily usage counter
+data/commit
+data/ai-usage.json
 docker-compose.override.yml

@@ -34,6 +34,14 @@ fi
 # built image, even when Compose would otherwise consider it unchanged (the usual
 # "code pushed but the container didn't restart" trap). --remove-orphans cleans up
 # any services dropped from the compose file.
+# Record the deployed commit where the server can read it at boot. The container
+# has no .git, so we write it to the mounted data volume (git is available here,
+# on the host, right after the pull). The server reads <dataDir>/commit on start.
+GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo dev)"
+if [ -n "$(git status --porcelain 2>/dev/null)" ]; then GIT_SHA="${GIT_SHA}-dirty"; fi
+mkdir -p ./data
+echo "$GIT_SHA" > ./data/commit
+echo "  deployed commit: $GIT_SHA"
 docker compose "${compose_files[@]}" --env-file "$ENV_FILE" up -d --build --force-recreate --remove-orphans
 echo "Deploy complete."
 docker compose "${compose_files[@]}" ps || true

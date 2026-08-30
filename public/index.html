@@ -416,7 +416,7 @@ h1 span{color:var(--accent)}
       <button class="nav-item" data-nav="settings" onclick="navGo('settings')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7.7 1.6 1.6 0 0 1-3.2 0 1.6 1.6 0 0 0-2.7-.7l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 4.6 15a1.6 1.6 0 0 1 0-3.2 1.6 1.6 0 0 0 .7-2.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 2.7-.7 1.6 1.6 0 0 1 3.2 0 1.6 1.6 0 0 0 2.7.7l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 .3 1.8"/></svg>Settings</button>
     </nav>
     <div class="sidebar-spacer"></div>
-    <div class="sidebar-user"><span id="headerUserEmail"></span></div>
+    <div class="sidebar-user"><span id="headerUserEmail"></span><span id="buildVersion" title="Deployed commit" style="display:block;margin-top:3px;color:var(--muted2);font-size:.62rem"></span></div>
     <button class="nav-item danger" onclick="doLogout()"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>Log out</button>
   </aside>
   <main class="app-main">
@@ -2659,7 +2659,7 @@ async function submitLogin(e) {
     document.getElementById('loginPassword').value = '';
     document.getElementById('loginCode').value = '';
     document.getElementById('loginCodeField').style.display = 'none';
-    window.features = d.features || window.features || {}; onAuthenticated(d.user);
+    window.features = d.features || window.features || {}; window.appVersion = d.version || window.appVersion; onAuthenticated(d.user);
   } catch { msg.textContent = 'Server unreachable.'; }
   return false;
 }
@@ -2684,6 +2684,8 @@ function onAuthenticated(user) {
   document.getElementById('loginOverlay').style.display = 'none';
   document.getElementById('appShell').style.display = 'flex';
   document.getElementById('headerUserEmail').textContent = user.email;
+  const bv = document.getElementById('buildVersion');
+  if (bv && window.appVersion) bv.textContent = 'build ' + window.appVersion;
   navGo('home');
   loadBridge();
 }
@@ -2723,7 +2725,7 @@ async function boot() {
   } catch { /* backend unreachable — fall through to login */ }
   try {
     const res = await fetch('/api/auth/me');
-    if (res.ok) { const me = await res.json(); window.features = me.features || {}; onAuthenticated(me.user); return; }
+    if (res.ok) { const me = await res.json(); window.features = me.features || {}; window.appVersion = me.version || window.appVersion; onAuthenticated(me.user); return; }
   } catch { /* fall through to login */ }
   showLogin();
 }
@@ -2760,7 +2762,7 @@ async function submitSetup(e) {
     const d = await res.json();
     if (!res.ok) { msg.className = 'form-msg bad'; msg.textContent = d.error || 'Setup failed'; return false; }
     document.getElementById('setupOverlay').style.display = 'none';
-    window.features = d.features || window.features || {}; onAuthenticated(d.user);
+    window.features = d.features || window.features || {}; window.appVersion = d.version || window.appVersion; onAuthenticated(d.user);
   } catch { msg.className = 'form-msg bad'; msg.textContent = 'Server unreachable.'; }
   finally { btn.disabled = false; btn.textContent = original; }
   return false;
