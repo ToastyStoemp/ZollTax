@@ -68,6 +68,11 @@
 }
 
 /* ── Sidebar ─────────────────────────────────────────────── */
+/* App shell: a fixed-width sidebar + a flexible main column. Both apps build
+ * their whole layout from these, so the chrome is identical. */
+.zui-shell { display: flex; min-height: 100vh; }
+.zui-main { flex: 1; min-width: 0; overflow-x: hidden; overflow-y: auto; padding: var(--zui-space-6); }
+
 .zui-sidebar {
   width: var(--zui-sidebar-w);
   flex: none;
@@ -78,6 +83,28 @@
   background: var(--zui-surface);
   border-right: 1px solid var(--zui-border);
 }
+.zui-sidebar-brand { display: flex; align-items: center; gap: var(--zui-space-2); padding: 6px 10px 16px; }
+.zui-sidebar-nav { display: flex; flex-direction: column; gap: var(--zui-space-1); }
+.zui-sidebar-spacer { flex: 1; min-height: 8px; }
+.zui-sidebar-footer {
+  font-size: 0.68rem; color: var(--zui-muted);
+  padding: 8px 11px; border-top: 1px solid var(--zui-border); word-break: break-all;
+}
+/* Phone: the sidebar collapses to a wrapping top row. An app can instead hide it
+ * (e.g. `hidden md:flex`) and provide its own bottom nav. */
+@media (max-width: 768px) {
+  .zui-shell { flex-direction: column; }
+  .zui-sidebar {
+    width: auto; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px;
+    border-right: 0; border-bottom: 1px solid var(--zui-border); padding: 10px 14px;
+  }
+  .zui-sidebar-brand { padding: 0 10px 0 0; }
+  .zui-sidebar-nav { flex-direction: row; flex-wrap: wrap; gap: 6px; }
+  .zui-sidebar-spacer, .zui-sidebar-footer { display: none; }
+  .zui-nav-item { width: auto; padding: 8px 10px; }
+  .zui-main { padding: var(--zui-space-4); }
+}
+
 .zui-brand {
   font-size: var(--zui-fs-xl);
   font-weight: var(--zui-fw-extrabold);
@@ -110,6 +137,7 @@
   color: var(--zui-accent);
   box-shadow: inset 0 0 0 1px var(--zui-accent-ring);
 }
+.zui-nav-item.danger:hover { background: rgba(248, 113, 113, 0.12); color: var(--zui-danger); }
 .zui-nav-item > svg {
   width: 18px; height: 18px; flex: none;
   stroke: currentColor; fill: none;
