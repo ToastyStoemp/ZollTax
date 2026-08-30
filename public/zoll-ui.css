@@ -371,3 +371,6 @@
 .zui-btn, .zui-icon-btn, .zui-back-btn, .zui-nav-item, .zui-pill,
 .zui-input, .zui-select, .zui-settings-card { line-height: 1.4; }
 .zui-settings-card-title, .zui-settings-card-desc { line-height: 1.4; }
+/* Titles too — an unpinned heading line-height shifts everything below it,
+ * offsetting a whole page's content between the two hosts. */
+.zui-title, .zui-title-lg, .zui-card-title { line-height: 1.25; }
