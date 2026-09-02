@@ -2177,7 +2177,11 @@ const ZDP = (() => {
   let pop = null;
   function closePop() { if (pop) { pop.root.remove(); pop = null; document.removeEventListener('keydown', onKey); } }
   function onKey(e) { if (e.key === 'Escape') closePop(); }
-  document.addEventListener('click', e => { if (pop && !pop.root.contains(e.target) && !pop.trigger.contains(e.target)) closePop(); });
+  // Detect outside-clicks on pointerdown, before any day/nav click re-renders
+  // the popover: on `click`, picking a start date rebuilds the grid and detaches
+  // the button just tapped, so root.contains(target) is false and the popover
+  // would wrongly close. pointerdown fires before that re-render.
+  document.addEventListener('pointerdown', e => { if (pop && !pop.root.contains(e.target) && !pop.trigger.contains(e.target)) closePop(); });
 
   function gridCells(y, m) {
     const lead = (new Date(y, m, 1).getDay() + 6) % 7;
