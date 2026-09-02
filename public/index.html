@@ -253,6 +253,31 @@ h1 span{color:var(--accent)}
 .pull-date:not([readonly]):hover{border-color:var(--accent2)}
 .pull-date[readonly]{opacity:.5;cursor:default}
 .pull-status{font-size:.72rem;color:var(--muted)}
+/* ── Hotel-style date picker (range + single, EU dd/mm/yyyy) ── */
+.zdp-trigger{display:inline-flex;align-items:center;gap:6px;background:var(--surface3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:var(--font);font-size:.75rem;padding:6px 10px;cursor:pointer;transition:border-color .12s}
+.zdp-trigger:hover{border-color:var(--accent2)}
+.zdp-trigger.zdp-empty{color:var(--muted)}
+.zdp-trigger .zdp-x{margin-left:2px;color:var(--muted2);font-size:.85rem;line-height:1}
+.zdp-trigger .zdp-x:hover{color:var(--red)}
+.zdp-pop{position:absolute;z-index:1000;margin-top:6px;background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:12px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.zdp-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px}
+.zdp-head .zdp-hint{font-size:.68rem;color:var(--muted)}
+.zdp-nav{background:transparent;border:0;color:var(--muted);font-size:1rem;padding:4px 8px;cursor:pointer;border-radius:6px}
+.zdp-nav:hover{background:rgba(255,255,255,.06);color:var(--text)}
+.zdp-months{display:flex;gap:16px}
+.zdp-mtitle{text-align:center;font-size:.8rem;font-weight:600;color:var(--text);margin-bottom:6px}
+.zdp-grid{display:grid;grid-template-columns:repeat(7,30px);gap:2px}
+.zdp-wd{height:22px;display:flex;align-items:center;justify-content:center;font-size:.6rem;color:var(--muted2)}
+.zdp-day{height:30px;border:0;background:transparent;color:var(--text);font-family:var(--font);font-size:.72rem;cursor:pointer;border-radius:8px}
+.zdp-day:hover:not(:disabled){background:var(--surface3)}
+.zdp-day:disabled{color:var(--muted2);opacity:.35;cursor:default}
+.zdp-day.zdp-today{box-shadow:inset 0 0 0 1px var(--border2)}
+.zdp-day.zdp-in{background:rgba(52,211,153,.22);border-radius:0}
+.zdp-day.zdp-edge{background:var(--accent);color:#04241a;font-weight:600}
+.zdp-foot{display:flex;align-items:center;justify-content:space-between;margin-top:8px;border-top:1px solid var(--border);padding-top:8px}
+.zdp-foot button{background:transparent;border:0;color:var(--muted);font-family:var(--font);font-size:.7rem;cursor:pointer}
+.zdp-foot .zdp-done{background:var(--surface3);border:1px solid var(--border2);border-radius:6px;color:var(--text);padding:4px 12px}
+@media (max-width:560px){.zdp-months{flex-direction:column}}
 .pull-panel .auto-btn{background:var(--accent2);border-color:var(--accent2);color:#04263a;font-weight:700;border-radius:8px;padding:7px 18px;box-shadow:0 2px 10px rgba(56,189,248,.32)}
 .pull-panel .auto-btn:hover{background:#7dd3fc;border-color:#7dd3fc}
 /* Drop-files + Pull transactions merged into one flat card */
@@ -448,9 +473,8 @@ h1 span{color:var(--accent)}
       <button type="button" class="pull-preset" data-range="last-3-months" onclick="setImportRange('last-3-months')">Last 3 months</button>
       <button type="button" class="pull-preset" data-range="custom" onclick="setImportRange('custom')">Custom</button>
     </div>
-    <input type="date" id="importFrom" class="pull-date" title="From" onchange="setImportRange('custom', { keepDates: true })">
-    <span class="pull-sep">→</span>
-    <input type="date" id="importTo" class="pull-date" title="To" onchange="setImportRange('custom', { keepDates: true })">
+    <input type="hidden" id="importFrom">
+    <input type="hidden" id="importTo">
     <button class="pill auto-btn" onclick="pullAll()">⬇ Pull</button>
     <span id="importStatus" class="pull-status"></span>
   </div>
@@ -1729,6 +1753,10 @@ function renderClusters(clusters) {
       el.style.display=open?'none':'block';
       b.textContent=open?'Show transactions ▾':'Hide transactions ▴';
     }));
+  // EU date picker for the split-date field (only the cluster being edited has one)
+  document.querySelectorAll('input[id^="date-split-"]').forEach(el => {
+    ZDP.attachSingle(el, { min: el.getAttribute('min') || undefined, max: el.getAttribute('max') || undefined });
+  });
 }
 
 const ICON_PDF=`<svg viewBox="0 0 16 16" fill="none"><path d="M3 2a1 1 0 011-1h6l3 3v10a1 1 0 01-1 1H4a1 1 0 01-1-1V2z" stroke="currentColor" stroke-width="1.3"/><path d="M9 1v3h3M5 9h6M5 11.5h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
@@ -2130,6 +2158,152 @@ function renderMyposAccounts() {
     ? a.map(x => `<label class="src-chip"><input type="checkbox" value="${x.account_number}" checked> ${x.currency} · ${x.account_number}${x.name ? ' <span class="src-mock" style="text-transform:none">' + x.name + '</span>' : ''}</label>`).join('')
     : '<span class="pull-status">no accounts</span>';
 }
+// ── ZDP: hotel-style date picker (range + single), EU dd/mm/yyyy display ──────
+// Native <input type=date> can't do range selection and shows the OS locale
+// format; ZDP replaces it with a two-month calendar that writes ISO yyyy-mm-dd
+// back into a hidden input (what the rest of the code reads) while showing EU
+// dd/mm/yyyy. Range mode picks start then end in one flow (hotel-booking style).
+const ZDP = (() => {
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const WD = ['Mo','Tu','We','Th','Fr','Sa','Su'];
+  const p2 = n => String(n).padStart(2, '0');
+  const parse = s => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? { y: +m[1], m: +m[2] - 1, d: +m[3] } : null; };
+  const iso = (y, m, d) => `${y}-${p2(m + 1)}-${p2(d)}`;
+  const eu = s => { const q = parse(s); return q ? `${p2(q.d)}/${p2(q.m + 1)}/${q.y}` : ''; };
+  const ord = (y, m, d) => Math.floor(Date.UTC(y, m, d) / 864e5);
+  const ordS = s => { const q = parse(s); return q ? ord(q.y, q.m, q.d) : null; };
+  const todayOrd = () => { const n = new Date(); return ord(n.getFullYear(), n.getMonth(), n.getDate()); };
+
+  let pop = null;
+  function closePop() { if (pop) { pop.root.remove(); pop = null; document.removeEventListener('keydown', onKey); } }
+  function onKey(e) { if (e.key === 'Escape') closePop(); }
+  document.addEventListener('click', e => { if (pop && !pop.root.contains(e.target) && !pop.trigger.contains(e.target)) closePop(); });
+
+  function gridCells(y, m) {
+    const lead = (new Date(y, m, 1).getDay() + 6) % 7;
+    const days = new Date(y, m + 1, 0).getDate();
+    const cells = [];
+    for (let i = 0; i < lead; i++) cells.push(null);
+    for (let d = 1; d <= days; d++) cells.push({ d, iso: iso(y, m, d), ord: ord(y, m, d) });
+    return cells;
+  }
+
+  function render(ctx) {
+    closePop();
+    const st = ctx.state;
+    const minO = ctx.min ? ordS(ctx.min) : null, maxO = ctx.max ? ordS(ctx.max) : null;
+    const root = document.createElement('div'); root.className = 'zdp-pop';
+    const monthsShown = () => {
+      const a = { y: st.y, m: st.m };
+      const t = a.y * 12 + a.m + 1, b = { y: Math.floor(t / 12), m: ((t % 12) + 12) % 12 };
+      return ctx.mode === 'range' ? [a, b] : [a];
+    };
+    function commit() { ctx.set(st.start, st.end); if (ctx.onChange) ctx.onChange(); }
+    function pick(c) {
+      if (ctx.mode === 'single') { st.start = c.iso; commit(); closePop(); return; }
+      const sO = ordS(st.start);
+      if (sO == null || st.end) { st.start = c.iso; st.end = ''; st.hover = null; commit(); draw(); return; }
+      if (c.ord < sO) { st.start = c.iso; commit(); draw(); return; }
+      st.end = c.iso; st.hover = null; commit(); closePop();
+    }
+    function draw() {
+      root.innerHTML = '';
+      const head = document.createElement('div'); head.className = 'zdp-head';
+      head.innerHTML = `<button class="zdp-nav" data-nav="-1">‹</button><span class="zdp-hint">${ctx.mode === 'range' ? 'Pick the start, then the end' : 'Pick a date'}</span><button class="zdp-nav" data-nav="1">›</button>`;
+      root.appendChild(head);
+      const wrap = document.createElement('div'); wrap.className = 'zdp-months';
+      for (const mo of monthsShown()) {
+        const col = document.createElement('div');
+        const title = document.createElement('div'); title.className = 'zdp-mtitle'; title.textContent = `${MONTHS[mo.m]} ${mo.y}`; col.appendChild(title);
+        const g = document.createElement('div'); g.className = 'zdp-grid';
+        for (const w of WD) { const s = document.createElement('div'); s.className = 'zdp-wd'; s.textContent = w; g.appendChild(s); }
+        const sO = ordS(st.start), eO = ordS(st.end);
+        for (const c of gridCells(mo.y, mo.m)) {
+          if (!c) { g.appendChild(document.createElement('div')); continue; }
+          const b = document.createElement('button'); b.className = 'zdp-day'; b.textContent = c.d; b.type = 'button';
+          if ((minO != null && c.ord < minO) || (maxO != null && c.ord > maxO)) b.disabled = true;
+          if (c.ord === todayOrd()) b.classList.add('zdp-today');
+          if (ctx.mode === 'single') { if (sO === c.ord) b.classList.add('zdp-edge'); }
+          else {
+            const endRef = eO != null ? eO : (st.hover != null && sO != null && st.hover >= sO ? st.hover : null);
+            if (sO === c.ord || eO === c.ord) b.classList.add('zdp-edge');
+            else if (sO != null && endRef != null && c.ord > Math.min(sO, endRef) && c.ord < Math.max(sO, endRef)) b.classList.add('zdp-in');
+          }
+          if (!b.disabled) {
+            b.addEventListener('click', () => pick(c));
+            if (ctx.mode === 'range') b.addEventListener('mouseenter', () => { st.hover = c.ord; draw(); });
+          }
+          g.appendChild(b);
+        }
+        col.appendChild(g); wrap.appendChild(col);
+      }
+      root.appendChild(wrap);
+      const foot = document.createElement('div'); foot.className = 'zdp-foot';
+      foot.innerHTML = `<button type="button" data-clear>Clear</button><button type="button" class="zdp-done" data-done>Done</button>`;
+      root.appendChild(foot);
+      root.querySelectorAll('[data-nav]').forEach(n => n.onclick = () => { const t = st.y * 12 + st.m + (+n.dataset.nav); st.y = Math.floor(t / 12); st.m = ((t % 12) + 12) % 12; draw(); });
+      root.querySelector('[data-clear]').onclick = () => { st.start = ''; st.end = ''; commit(); draw(); };
+      root.querySelector('[data-done]').onclick = () => closePop();
+    }
+    pop = { root, trigger: ctx.trigger };
+    draw();
+    document.body.appendChild(root);
+    const r = ctx.trigger.getBoundingClientRect();
+    root.style.left = Math.min(window.scrollX + r.left, window.scrollX + document.documentElement.clientWidth - root.offsetWidth - 8) + 'px';
+    root.style.top = (window.scrollY + r.bottom) + 'px';
+    document.addEventListener('keydown', onKey);
+  }
+
+  const fmtRange = (s, e) => { const f = eu(s), t = eu(e); return f && t ? `${f} → ${t}` : (f ? `${f} → …` : ''); };
+  function makeTrigger() { const b = document.createElement('button'); b.type = 'button'; b.className = 'zdp-trigger zdp-empty'; return b; }
+  function fillTrigger(btn, txt, ph, onClear) {
+    btn.classList.toggle('zdp-empty', !txt);
+    btn.innerHTML = '';
+    const label = document.createElement('span'); label.textContent = txt || ph; btn.appendChild(label);
+    if (txt && onClear) { const x = document.createElement('span'); x.className = 'zdp-x'; x.textContent = '✕'; x.onclick = ev => { ev.stopPropagation(); onClear(); }; btn.appendChild(x); }
+  }
+
+  function attachRange(fromEl, toEl, opts = {}) {
+    fromEl.type = 'hidden'; toEl.type = 'hidden';
+    const btn = makeTrigger(); toEl.after(btn);
+    const refresh = () => fillTrigger(btn, fmtRange(fromEl.value, toEl.value), opts.placeholder || 'Select dates',
+      () => { fromEl.value = ''; toEl.value = ''; refresh(); if (opts.onChange) opts.onChange(); });
+    btn.addEventListener('click', () => {
+      if (pop && pop.trigger === btn) { closePop(); return; }
+      const base = parse(fromEl.value) || parse(toEl.value) || { y: new Date().getFullYear(), m: new Date().getMonth() };
+      render({ trigger: btn, mode: 'range', min: opts.min, max: opts.max,
+        state: { y: base.y, m: base.m, start: fromEl.value || '', end: toEl.value || '', hover: null },
+        set: (s, e) => { fromEl.value = s; toEl.value = e; refresh(); }, onChange: opts.onChange });
+    });
+    refresh();
+    return { refresh };
+  }
+
+  function attachSingle(el, opts = {}) {
+    el.type = 'hidden';
+    const btn = makeTrigger(); el.after(btn);
+    const refresh = () => fillTrigger(btn, eu(el.value), opts.placeholder || 'Select date',
+      () => { el.value = ''; refresh(); if (opts.onChange) opts.onChange(); });
+    btn.addEventListener('click', () => {
+      if (pop && pop.trigger === btn) { closePop(); return; }
+      const base = parse(el.value) || { y: new Date().getFullYear(), m: new Date().getMonth() };
+      render({ trigger: btn, mode: 'single', min: opts.min, max: opts.max,
+        state: { y: base.y, m: base.m, start: el.value || '', end: '', hover: null },
+        set: s => { el.value = s; refresh(); }, onChange: opts.onChange });
+    });
+    refresh();
+    return { refresh };
+  }
+
+  return { attachRange, attachSingle, eu };
+})();
+
+// Wire the import From/To range once the DOM is ready.
+(function initImportRangePicker() {
+  const f = document.getElementById('importFrom'), t = document.getElementById('importTo');
+  if (f && t) window.__importRangePicker = ZDP.attachRange(f, t, { onChange: () => setImportRange('custom', { keepDates: true }) });
+})();
+
 function setImportRange(mode, opts = {}) {
   window.importRangeMode = mode;
   document.querySelectorAll('#importPanel [data-range]').forEach(b => b.classList.toggle('active', b.dataset.range === mode));
@@ -2138,9 +2312,7 @@ function setImportRange(mode, opts = {}) {
     document.getElementById('importFrom').value = r.from;
     document.getElementById('importTo').value = r.to;
   }
-  const custom = mode === 'custom';
-  document.getElementById('importFrom').readOnly = !custom;
-  document.getElementById('importTo').readOnly = !custom;
+  if (window.__importRangePicker) window.__importRangePicker.refresh();
 }
 
 // ── Progress overlay (shared by Pull and Book) ──────────────────────────────
@@ -2983,8 +3155,10 @@ async function ledgerOpenEvent(eventId, name, country) {
     '<div class="full"><label id="lg_descLabel">Description <span class="lg-exp-sub">(optional)</span></label><input id="lg_vendor" placeholder="e.g. Hotel Ibis"></div>' +
     '</div><div style="margin-top:10px"><button class="btn-primary" onclick="lgAddExpense()">Add expense</button></div></div>';
   const today = new Date().toISOString().slice(0, 10);
-  const dt = document.getElementById('lg_date'); if (dt) dt.value = today;
+  const dt = document.getElementById('lg_date');
+  if (dt) { dt.value = today; window.__lgDatePicker = ZDP.attachSingle(dt); }
   lgApplyScan(); // if a scanned PDF is pending, overwrite the defaults with its data
+  if (window.__lgDatePicker) window.__lgDatePicker.refresh(); // reflect any scanned date
 }
 
 function lgExpenseRow(e) {
