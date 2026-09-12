@@ -27,6 +27,12 @@ import {
   listUsers,
   saveTenantConfig,
   setPassword,
+  findUserByEmail,
+  addGrant,
+  removeGrant,
+  helpersOf,
+  tenantsFor,
+  canAccessTenant,
 } from './store.js';
 import { getTenantClients, invalidateTenant } from './tenant.js';
 import {
@@ -189,8 +195,8 @@ async function startSession(req, res, userId) {
 // ── Authenticated API routes: (ctx) → JSON. ctx = { url, body, user, clients } ─
 
 const routes = {
-  'GET /api/status': async ({ user, clients }) => ({
-    enabled: enabledMap(getTenantConfig(user.id)),
+  'GET /api/status': async ({ tenantId, clients }) => ({
+    enabled: enabledMap(getTenantConfig(tenantId)),
     zolltool: { configured: clients.zoll.configured, url: clients.zoll.config.url || null },
     mypos: { mode: clients.mypos.mode },
     shopify: await clients.shopify.status({ warmToken: true }),
@@ -198,16 +204,16 @@ const routes = {
     lexware: { configured: !!clients.lexware.apiKey, feeCategory: !!clients.lexware.feeCategory },
   }),
 
-  'GET /api/config': async ({ user }) => {
-    const cfg = getTenantConfig(user.id);
+  'GET /api/config': async ({ tenantId }) => {
+    const cfg = getTenantConfig(tenantId);
     return { groups: CONFIG_GROUPS, values: redactConfig(cfg), enabled: enabledMap(cfg) };
   },
 
-  'PUT /api/config': async ({ user, body }) => {
+  'PUT /api/config': async ({ tenantId, body }) => {
     if (!masterKeyConfigured()) throw new HttpError(500, 'Server has no encryption key configured (ZOLLTAX_MASTER_KEY).');
-    saveTenantConfig(user.id, { set: body.set || {}, clear: body.clear || [], enabled: body.enabled });
-    invalidateTenant(user.id);
-    const cfg = getTenantConfig(user.id);
+    saveTenantConfig(tenantId, { set: body.set || {}, clear: body.clear || [], enabled: body.enabled });
+    invalidateTenant(tenantId);
+    const cfg = getTenantConfig(tenantId);
     return { ok: true, values: redactConfig(cfg), enabled: enabledMap(cfg) };
   },
 
@@ -242,13 +248,13 @@ const routes = {
   },
 
   // ── ZollLedger: per-event expenses + P&L ──
-  'GET /api/ledger/expenses': async ({ user, url }) => ({
+  'GET /api/ledger/expenses': async ({ tenantId, url }) => ({
     categories: EXPENSE_CATEGORIES,
-    expenses: listExpenses(user.id, url.searchParams.get('eventId') || undefined),
+    expenses: listExpenses(tenantId, url.searchParams.get('eventId') || undefined),
   }),
-  'POST /api/ledger/expenses': async ({ user, body }) => ({ expense: addExpense(user.id, body || {}) }),
-  'GET /api/ledger/pnl': async ({ user, clients }) => {
-    const expenses = listExpenses(user.id);
+  'POST /api/ledger/expenses': async ({ tenantId, body }) => ({ expense: addExpense(tenantId, body || {}) }),
+  'GET /api/ledger/pnl': async ({ tenantId, clients }) => {
+    const expenses = listExpenses(tenantId);
     // Event list (for names/countries) — degrade gracefully if ZollTool is off.
     let events = [];
     try { events = await clients.zoll.getEvents(); } catch { /* unreachable */ }
@@ -273,7 +279,7 @@ const routes = {
   // Scan an invoice PDF with Claude → prefill fields + auto-match an event.
   // Cost is bounded three ways: a PDF size cap, a per-IP burst limit, and the
   // persistent daily call/token quota (ai-usage.js) — the hard bill ceiling.
-  'POST /api/ledger/parse': async ({ user, body, clients }) => {
+  'POST /api/ledger/parse': async ({ user, tenantId, body, clients }) => {
     const ai = clients.ai;
     if (!ai.configured) throw new HttpError(503, 'Invoice scanning is off — add an Anthropic API key in Settings → Invoice scanning.');
     const base64 = String((body && body.base64) || '');
@@ -285,13 +291,13 @@ const routes = {
     const burst = rateLimit(`ai:${user.id}`, PARSE_RATE_MAX, RATE_WINDOW);
     if (!burst.ok) throw new HttpError(429, 'Too many scans — wait a moment and try again.');
     const limits = { dailyCalls: ai.dailyCalls, dailyTokens: ai.dailyTokens };
-    if (!aiQuota(user.id, limits).ok) throw new HttpError(429, 'The daily invoice-scan limit has been reached. Try again tomorrow.');
+    if (!aiQuota(tenantId, limits).ok) throw new HttpError(429, 'The daily invoice-scan limit has been reached. Try again tomorrow.');
     const { fields, usage } = await parseInvoicePdf(base64, ai);
-    aiRecord(user.id, usage); // count real token spend against today's budget
+    aiRecord(tenantId, usage); // count real token spend against the tenant's budget
     let events = [];
     try { events = await clients.zoll.getEvents(); } catch { /* no ZollTool → skip matching */ }
     const { match, candidates } = matchEvent(fields, events);
-    return { fields, match, candidates, remainingToday: aiQuota(user.id, limits).remainingCalls };
+    return { fields, match, candidates, remainingToday: aiQuota(tenantId, limits).remainingCalls };
   },
 
   'GET /api/mypos/accounts': async ({ clients }) => ({
@@ -380,6 +386,25 @@ const routes = {
     sessions: listForUser(user.id).map((s) => ({ ...s, current: s.id === sessionId })),
   }),
 
+  // ── Helpers: grant others access to YOUR tenant / see whose you can open ─────
+  'GET /api/helpers': async ({ user }) => {
+    const resolve = (id) => {
+      const u = getUser(id);
+      return u ? { id: u.id, email: u.email, name: u.name } : { id, email: '(removed account)', name: '' };
+    };
+    return {
+      helpers: helpersOf(user.id).map(resolve), // people who can act on my data
+      tenants: tenantsFor(user.id).map(resolve), // tenants I've been granted
+    };
+  },
+  'POST /api/helpers': async ({ user, body }) => {
+    const helper = findUserByEmail((body || {}).email);
+    if (!helper) throw new HttpError(404, 'No ZollTax account with that email. Ask them to create an account first, then add them.');
+    if (helper.id === user.id) throw new HttpError(400, "That's your own account.");
+    addGrant(user.id, helper.id);
+    return { helper: { id: helper.id, email: helper.email, name: helper.name } };
+  },
+
   // ── Admin: user (client) management ────────────────────────────────────────
   'GET /api/admin/users': async ({ user }) => {
     requireAdmin(user);
@@ -445,23 +470,31 @@ async function sessionSubroute(method, path, ctx) {
   return undefined;
 }
 
+// Revoke a helper's access to your tenant (helper id in the path).
+async function helperSubroute(method, path, ctx) {
+  const m = /^\/api\/helpers\/([^/]+)$/.exec(path);
+  if (!m || method !== 'DELETE') return undefined;
+  removeGrant(ctx.user.id, m[1]);
+  return { ok: true };
+}
+
 // ZollLedger: edit/delete an expense, or attach its invoice PDF (id in the path).
 async function ledgerSubroute(method, path, ctx) {
   let m = /^\/api\/ledger\/expenses\/([^/]+)$/.exec(path);
   if (m) {
     if (method === 'PUT') {
-      const expense = updateExpense(ctx.user.id, m[1], ctx.body || {});
+      const expense = updateExpense(ctx.tenantId, m[1], ctx.body || {});
       if (!expense) throw new HttpError(404, 'Expense not found');
       return { expense };
     }
     if (method === 'DELETE') {
-      if (!deleteExpense(ctx.user.id, m[1])) throw new HttpError(404, 'Expense not found');
+      if (!deleteExpense(ctx.tenantId, m[1])) throw new HttpError(404, 'Expense not found');
       return { ok: true };
     }
   }
   m = /^\/api\/ledger\/expenses\/([^/]+)\/invoice$/.exec(path);
   if (m && method === 'POST') {
-    const expense = saveInvoice(ctx.user.id, m[1], (ctx.body || {}).base64, (ctx.body || {}).filename);
+    const expense = saveInvoice(ctx.tenantId, m[1], (ctx.body || {}).base64, (ctx.body || {}).filename);
     if (!expense) throw new HttpError(400, 'No such expense, or the file was empty.');
     return { expense };
   }
@@ -673,7 +706,11 @@ const server = createServer(async (req, res) => {
       const sess = currentSession(req);
       const user = sess ? getUser(sess.userId) : null;
       if (!user) return send(res, 401, { error: 'Not authenticated' });
-      return send(res, 200, { user, twoFactor: has2fa(user.id), features: { invoiceScan: getTenantClients(user.id).ai.configured }, version: COMMIT_SHA });
+      const tenants = [
+        { id: user.id, email: user.email, self: true },
+        ...tenantsFor(user.id).map((id) => { const o = getUser(id); return { id, email: o ? o.email : '(removed account)', self: false }; }),
+      ];
+      return send(res, 200, { user, tenants, twoFactor: has2fa(user.id), features: { invoiceScan: getTenantClients(user.id).ai.configured }, version: COMMIT_SHA });
     }
 
     // Everything else requires a valid server-side session.
@@ -685,12 +722,19 @@ const server = createServer(async (req, res) => {
       return send(res, 401, { error: 'Not authenticated' });
     }
     touchSession(sess.id);
-    const ctx = { url, body, user, sessionId: sess.id, ip, clients: getTenantClients(user.id) };
+    // Acting tenant: your own data by default, or a tenant a helper was granted.
+    // The requested tenant (a header from the switcher) is always re-validated
+    // against the grant table, so it can never widen access on its own.
+    const requestedTenant = req.headers['x-zolltax-tenant'];
+    const tenantId = requestedTenant && canAccessTenant(user.id, String(requestedTenant))
+      ? String(requestedTenant)
+      : user.id;
+    const ctx = { url, body, user, tenantId, sessionId: sess.id, ip, clients: getTenantClients(tenantId) };
 
     // Ledger invoice PDF download (binary — bypasses the JSON senders).
     const invM = /^\/api\/ledger\/expenses\/([^/]+)\/invoice$/.exec(path);
     if (method === 'GET' && invM) {
-      const inv = readInvoice(user.id, invM[1]);
+      const inv = readInvoice(tenantId, invM[1]);
       if (!inv) return send(res, 404, { error: 'No invoice on file.' });
       res.writeHead(200, {
         'content-type': 'application/pdf',
@@ -700,6 +744,7 @@ const server = createServer(async (req, res) => {
     }
 
     const sub = (await adminUserSubroute(method, path, ctx))
+      ?? (await helperSubroute(method, path, ctx))
       ?? (await sessionSubroute(method, path, ctx))
       ?? (await ledgerSubroute(method, path, ctx));
     if (sub !== undefined) return send(res, 200, sub);

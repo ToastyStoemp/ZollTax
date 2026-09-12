@@ -437,6 +437,7 @@ h1 span{color:var(--accent)}
     <div class="zui-sidebar-brand">
       <h1 class="zui-brand">Zoll<span>Tax</span></h1>
     </div>
+    <div id="tenantSwitcher" style="padding:2px 10px 8px;display:none"></div>
     <nav class="zui-sidebar-nav">
       <button class="zui-nav-item is-active" data-nav="home" onclick="navGo('home')"><svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M4 21h16"/></svg>Import</button>
       <button class="zui-nav-item" data-nav="ledger" onclick="navGo('ledger')"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v18H6a2 2 0 0 1-2-2z"/><path d="M8 8h8"/><path d="M8 12h8"/></svg>Ledger</button>
@@ -605,6 +606,16 @@ h1 span{color:var(--accent)}
       </div>
       <p class="modal-sub" id="mySessGeoNote" style="margin-bottom:8px"></p>
       <div id="mySessions"></div>
+    </div>
+    <div class="cfg-group">
+      <h3>Helpers (access to your data)</h3>
+      <div class="ghint">Let someone with their own ZollTax account — e.g. your accountant — view and edit your tax data. They keep their own login, password &amp; 2FA; you can revoke anytime. Add them by the email they registered with.</div>
+      <div id="helpersList" style="margin-top:10px"></div>
+      <div style="margin-top:14px;display:flex;gap:8px;align-items:flex-end">
+        <div class="field" style="flex:1;margin:0"><label>Helper’s email</label><input id="newHelperEmail" type="email" placeholder="accountant@example.com"></div>
+        <button class="btn-primary" onclick="addHelper()">Grant access</button>
+      </div>
+      <div id="helpersMsg" class="form-msg" style="margin-top:10px"></div>
     </div>
     <div id="adminAccountsSection" style="display:none">
       <div class="cfg-group">
@@ -2905,7 +2916,60 @@ function openSettings() {
 function backToSettings() { openSettings(); }       // sub-page → Settings landing
 function closeSettings() { hideAllSections(); setActiveNav('home'); }  // landing → Home
 
+// ── Helper access: act on a client's tenant. A global fetch wrapper stamps the
+// chosen tenant on every /api/ request; the server re-validates it against the
+// grant table, so it can only ever narrow to a tenant you were granted. ──
+function installTenantFetch() {
+  if (window.__origFetch) return;
+  window.__origFetch = window.fetch.bind(window);
+  window.activeTenant = null;
+  window.fetch = function (input, init) {
+    try {
+      const url = typeof input === 'string' ? input : (input && input.url) || '';
+      if (window.activeTenant && url.indexOf('/api/') === 0) {
+        init = Object.assign({}, init);
+        init.headers = Object.assign({}, (init && init.headers) || {}, { 'x-zolltax-tenant': window.activeTenant });
+      }
+    } catch (e) { /* never break a request over this */ }
+    return window.__origFetch(input, init);
+  };
+}
+const _escT = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function applyTenants(me) {
+  window.tenants = (me.tenants && me.tenants.length) ? me.tenants : [{ id: me.user.id, email: me.user.email, self: true }];
+  let stored = null; try { stored = localStorage.getItem('zolltax_tenant'); } catch (e) {}
+  const ok = stored && window.tenants.some((t) => t.id === stored && !t.self);
+  window.activeTenant = ok ? stored : null;
+  if (!ok) { try { localStorage.removeItem('zolltax_tenant'); } catch (e) {} }
+  renderTenantSwitcher();
+}
+
+function renderTenantSwitcher() {
+  const el = document.getElementById('tenantSwitcher');
+  if (!el) return;
+  const tenants = window.tenants || [];
+  if (tenants.length < 2) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const self = tenants.find((t) => t.self) || tenants[0];
+  const cur = window.activeTenant || self.id;
+  const opts = tenants.map((t) => `<option value="${_escT(t.id)}"${t.id === cur ? ' selected' : ''}>${t.self ? 'My data' : _escT(t.email)}</option>`).join('');
+  const acting = window.activeTenant ? (tenants.find((t) => t.id === window.activeTenant) || {}).email : '';
+  el.style.display = 'block';
+  el.innerHTML = `<label style="font-size:.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:.09em">Viewing</label>
+    <select onchange="switchTenant(this.value)" style="width:100%;margin-top:3px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:.78rem">${opts}</select>
+    ${acting ? `<div style="margin-top:6px;font-size:.62rem;color:var(--warn,#fbbf24);line-height:1.3">⚠ Editing <b>${_escT(acting)}</b>’s data</div>` : ''}`;
+}
+
+function switchTenant(id) {
+  const self = (window.tenants || []).find((t) => t.self);
+  const next = (id && self && id !== self.id) ? id : null;
+  try { if (next) localStorage.setItem('zolltax_tenant', next); else localStorage.removeItem('zolltax_tenant'); } catch (e) {}
+  window.activeTenant = next;
+  location.reload();
+}
+
 async function boot() {
+  installTenantFetch();
   // First run? Show the setup wizard before anything else.
   try {
     const s = await fetch('/api/setup/status').then(r => r.json());
@@ -2913,7 +2977,7 @@ async function boot() {
   } catch { /* backend unreachable — fall through to login */ }
   try {
     const res = await fetch('/api/auth/me');
-    if (res.ok) { const me = await res.json(); window.features = me.features || {}; window.appVersion = me.version || window.appVersion; onAuthenticated(me.user); return; }
+    if (res.ok) { const me = await res.json(); window.features = me.features || {}; window.appVersion = me.version || window.appVersion; applyTenants(me); onAuthenticated(me.user); return; }
   } catch { /* fall through to login */ }
   showLogin();
 }
@@ -3000,6 +3064,7 @@ function openAccount() {
   document.getElementById('acctMsg').textContent = '';
   load2fa();
   refreshMySessions();
+  loadHelpers();
   const adminSec = document.getElementById('adminAccountsSection');
   if (u.role === 'admin') {
     adminSec.style.display = 'block';
@@ -3509,6 +3574,38 @@ function sessionRow(s, opts) {
     '<div class="min-w-0" style="flex:1;min-width:0"><div style="font-size:.82rem">' + who + (s.device || 'Session') + cur + '</div>' +
     '<div style="font-size:.72rem;color:var(--muted)">' + meta + ' · active ' + fmtAgo(s.lastSeenAt) + '</div></div>' + btn + '</div>';
 }
+async function loadHelpers() {
+  const list = document.getElementById('helpersList');
+  if (!list) return;
+  list.innerHTML = '<p style="color:var(--muted);font-size:.8rem">Loading…</p>';
+  let d;
+  try { d = await fetch('/api/helpers').then(r => r.json()); } catch { list.innerHTML = '<p class="form-msg bad">Could not load helpers.</p>'; return; }
+  const helpers = d.helpers || [];
+  if (!helpers.length) { list.innerHTML = '<p style="color:var(--muted);font-size:.8rem">No helpers yet.</p>'; return; }
+  list.innerHTML = helpers.map((h) =>
+    `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px">
+       <span style="flex:1;font-size:.84rem">${_escT(h.email)}${h.name ? ` <span style="color:var(--muted)">· ${_escT(h.name)}</span>` : ''}</span>
+       <button class="icon-btn" style="font-size:.66rem;padding:4px 9px;color:var(--red,#f87171)" onclick="removeHelper('${_escT(h.id)}','${_escT(h.email)}')">Revoke</button>
+     </div>`).join('');
+}
+async function addHelper() {
+  const email = (document.getElementById('newHelperEmail').value || '').trim();
+  const msg = document.getElementById('helpersMsg');
+  msg.className = 'form-msg'; msg.textContent = '';
+  if (!email) { msg.className = 'form-msg bad'; msg.textContent = 'Enter an email.'; return; }
+  const res = await fetch('/api/helpers', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email }) });
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) { msg.className = 'form-msg bad'; msg.textContent = d.error || 'Could not add helper.'; return; }
+  document.getElementById('newHelperEmail').value = '';
+  msg.className = 'form-msg good'; msg.textContent = 'Access granted to ' + ((d.helper && d.helper.email) || email) + '.';
+  loadHelpers();
+}
+async function removeHelper(id, email) {
+  if (!confirm('Revoke access for ' + email + '? They will no longer be able to open your data.')) return;
+  await fetch('/api/helpers/' + encodeURIComponent(id), { method: 'DELETE' });
+  loadHelpers();
+}
+
 async function refreshMySessions() {
   const host = document.getElementById('mySessions');
   host.innerHTML = '<p style="color:var(--muted);font-size:.8rem">Loading…</p>';

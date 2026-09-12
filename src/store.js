@@ -125,11 +125,62 @@ export function deleteUser(id) {
   const next = users.filter((u) => u.id !== id);
   if (next.length === users.length) throw new Error('User not found.');
   writeUsers(next);
+  // Drop any helper grants that reference the removed account (as owner or helper).
+  writeGrants(readGrants().filter((g) => g.ownerId !== id && g.helperId !== id));
   try {
     unlinkSync(join(CLIENTS_DIR, `${id}.enc`));
   } catch {
     /* no config file — fine */
   }
+}
+
+/** Look up an account by email (case-insensitive). Public shape or null. */
+export function findUserByEmail(email) {
+  const norm = String(email || '').trim().toLowerCase();
+  return publicUser(readUsers().find((u) => u.email === norm));
+}
+
+// ── Helper grants ────────────────────────────────────────────────────────────
+// A grant lets `helperId` act on `ownerId`'s tenant (full access to that tenant's
+// data). Identity actions (password, 2FA, sessions) always stay on the helper's
+// OWN account — only the tenant data is shared.
+
+const GRANTS_FILE = join(DATA_DIR, 'grants.json');
+function readGrants() {
+  try {
+    return JSON.parse(readFileSync(GRANTS_FILE, 'utf8'));
+  } catch {
+    return [];
+  }
+}
+function writeGrants(grants) {
+  writeAtomic(GRANTS_FILE, JSON.stringify(grants, null, 2));
+}
+
+export function addGrant(ownerId, helperId) {
+  if (!ownerId || !helperId) throw new Error('Owner and helper are required.');
+  if (ownerId === helperId) throw new Error("You can't add yourself as a helper.");
+  const grants = readGrants();
+  if (!grants.some((g) => g.ownerId === ownerId && g.helperId === helperId)) {
+    grants.push({ ownerId, helperId, createdAt: Date.now() });
+    writeGrants(grants);
+  }
+}
+export function removeGrant(ownerId, helperId) {
+  writeGrants(readGrants().filter((g) => !(g.ownerId === ownerId && g.helperId === helperId)));
+}
+/** Helper user ids granted access to `ownerId`'s tenant. */
+export function helpersOf(ownerId) {
+  return readGrants().filter((g) => g.ownerId === ownerId).map((g) => g.helperId);
+}
+/** Owner tenant ids that `helperId` may act on. */
+export function tenantsFor(helperId) {
+  return readGrants().filter((g) => g.helperId === helperId).map((g) => g.ownerId);
+}
+/** True when `userId` may act on `tenantId` (their own tenant, or a granted one). */
+export function canAccessTenant(userId, tenantId) {
+  if (userId === tenantId) return true;
+  return readGrants().some((g) => g.ownerId === tenantId && g.helperId === userId);
 }
 
 /**
