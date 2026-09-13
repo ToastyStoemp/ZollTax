@@ -1690,6 +1690,10 @@ function renderFilters() {
   const rightBtns=[];
   if (window.bridge && (window.zollEvents||[]).length)
     rightBtns.push(`<button class="pill auto-btn" onclick="autoMergeAndMatch()">✨ Auto merge &amp; match</button>`);
+  if (window.bridge) {
+    const nMatched = allClusters.filter(c => c.matchedEventId && !c.isOnlineCluster).length;
+    if (nMatched) rightBtns.push(`<button class="pill" onclick="setAllCashAmounts()">💶 Set Cash amounts (${nMatched})</button>`);
+  }
   if (window.bridge && window.bridge.lexware && window.bridge.lexware.configured) {
     const n = allClusters.filter(c=>!c.bookedVoucherId && clusterReady(c)).length;
     rightBtns.push(`<button class="pill book-all-btn" ${n?'':'disabled'} onclick="bookAllReady()">⇪ Book all ready${n?` (${n})`:''}</button>`);
@@ -2463,6 +2467,29 @@ async function loadClusterCash(uid) {
     c.cashLoaded = true;
     render();
   } catch (e) { alert('Cash from ZollTool: ' + e.message); }
+}
+
+// Bulk: pull ZollTool cash onto every cluster matched to an event (skips online
+// and unmatched clusters). Overwrites existing cash on the matched clusters.
+async function setAllCashAmounts() {
+  const matched = allClusters.filter(c => c.matchedEventId && !c.isOnlineCluster);
+  if (!matched.length) { alert('No clusters are matched to a ZollTool event yet — match events first (or use ✨ Auto merge & match).'); return; }
+  const manual = matched.filter(c => (c.cashAmount || 0) > 0 && c.cashNote !== 'ZollTool cash').length;
+  if (manual && !confirm(`Set cash from ZollTool on ${matched.length} matched cluster(s)? This overwrites cash on ${manual} cluster(s) you entered manually.`)) return;
+  let set = 0, failed = 0, total = 0;
+  for (const c of matched) {
+    try {
+      const d = await fetch('/api/zolltool/cash?eventId=' + encodeURIComponent(c.matchedEventId)).then(r => r.json());
+      if (d.error) throw new Error(d.error);
+      c.cashAmount = d.cash || 0;
+      c.cashNote = 'ZollTool cash';
+      c.cashLoaded = true;
+      total += c.cashAmount;
+      set++;
+    } catch (e) { failed++; }
+  }
+  render();
+  alert(`Cash set on ${set} matched cluster(s)${failed ? `, ${failed} failed` : ''} — €${total.toFixed(2)} total added.`);
 }
 function accountingControls(c) {
   if (!window.bridge) return '';
